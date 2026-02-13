@@ -7,6 +7,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDemo } from "@/lib/demo/demo-store";
 import { requireOwnerAuth } from "@/lib/security/owner-auth";
 import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { Badge } from "@/ui/badge";
+import { Chip } from "@/ui/chip";
+import { Divider } from "@/ui/divider";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
@@ -50,20 +53,7 @@ export default function AgentScreen() {
                 <View style={{ gap: 12 }}>
                   <Row>
                     <H2>Status</H2>
-                    <View
-                      style={{
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor: state.policy.emergencyLockdown ? "rgba(255,69,58,0.35)" : "rgba(48,209,88,0.28)",
-                        backgroundColor: state.policy.emergencyLockdown ? "rgba(255,69,58,0.10)" : "rgba(48,209,88,0.10)",
-                      }}
-                    >
-                      <Body style={{ fontFamily: t.font.bodyMedium, color: state.policy.emergencyLockdown ? t.colors.bad : t.colors.good }}>
-                        {state.policy.emergencyLockdown ? "Locked" : "Active"}
-                      </Body>
-                    </View>
+                    <Badge label={state.policy.emergencyLockdown ? "Locked" : "Active"} tone={state.policy.emergencyLockdown ? "danger" : "good"} />
                   </Row>
 
                   <ToggleRow
@@ -103,38 +93,7 @@ export default function AgentScreen() {
                     <View style={{ gap: 10 }}>
                       <Row>
                         <H2>Proposal</H2>
-                        <View
-                          style={{
-                            paddingVertical: 6,
-                            paddingHorizontal: 10,
-                            borderRadius: 999,
-                            borderWidth: 1,
-                            borderColor:
-                              p.risk === "high"
-                                ? "rgba(255,69,58,0.35)"
-                                : p.risk === "medium"
-                                  ? "rgba(255,159,10,0.35)"
-                                  : "rgba(48,209,88,0.28)",
-                            backgroundColor:
-                              p.risk === "high"
-                                ? "rgba(255,69,58,0.10)"
-                                : p.risk === "medium"
-                                  ? "rgba(255,159,10,0.10)"
-                                  : "rgba(48,209,88,0.10)",
-                          }}
-                        >
-                          <Body
-                            style={{
-                              fontFamily: t.font.bodyMedium,
-                              color: p.risk === "high" ? t.colors.bad : p.risk === "medium" ? t.colors.warn : t.colors.good,
-                              textTransform: "uppercase",
-                              letterSpacing: 0.6,
-                              fontSize: 12,
-                            }}
-                          >
-                            {p.risk} risk
-                          </Body>
-                        </View>
+                        <Badge label={`${p.risk} risk`} tone={p.risk === "high" ? "danger" : p.risk === "medium" ? "warn" : "good"} />
                       </Row>
 
                       <View style={{ gap: 4 }}>
@@ -231,6 +190,7 @@ export default function AgentScreen() {
                   paddingVertical: 10,
                   paddingHorizontal: 12,
                   borderRadius: 16,
+                  borderCurve: "continuous",
                   borderWidth: 1,
                   borderColor: t.colors.glassBorder,
                   backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.7)",
@@ -251,10 +211,21 @@ export default function AgentScreen() {
                   paddingVertical: 12,
                   paddingHorizontal: 14,
                   borderRadius: 16,
+                  borderCurve: "continuous",
                   opacity: !draft.trim() ? 0.45 : pressed ? 0.85 : 1,
                   borderWidth: 1,
-                  borderColor: t.colors.glassBorder,
-                  backgroundColor: t.scheme === "dark" ? "rgba(106,228,215,0.14)" : "rgba(36,87,255,0.12)",
+                  borderColor: draft.trim()
+                    ? t.scheme === "dark"
+                      ? "rgba(90,169,255,0.34)"
+                      : "rgba(36,87,255,0.26)"
+                    : t.colors.glassBorder,
+                  backgroundColor: draft.trim()
+                    ? t.scheme === "dark"
+                      ? "rgba(90,169,255,0.16)"
+                      : "rgba(36,87,255,0.12)"
+                    : t.scheme === "dark"
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(255,255,255,0.60)",
                 })}
               >
                 <Body style={{ fontFamily: t.font.bodySemibold }}>Send</Body>
@@ -268,25 +239,14 @@ export default function AgentScreen() {
 }
 
 function PromptChip(props: { label: string; onPress: () => void }) {
-  const t = useAppTheme();
   return (
-    <Pressable
+    <Chip
+      label={props.label}
       onPress={async () => {
         await haptic("tap");
         props.onPress();
       }}
-      style={({ pressed }) => ({
-        paddingVertical: 9,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: t.colors.glassBorder,
-        backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)",
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <Body style={{ fontFamily: t.font.bodyMedium }}>{props.label}</Body>
-    </Pressable>
+    />
   );
 }
 
@@ -309,7 +269,7 @@ function ToggleRow(props: { title: string; body: string; value: boolean; onChang
           thumbColor="#FFFFFF"
         />
       </Row>
-      <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+      <Divider />
     </View>
   );
 }

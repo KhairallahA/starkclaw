@@ -4,6 +4,9 @@ import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 
 import { useDemo } from "@/lib/demo/demo-store";
 import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { Badge } from "@/ui/badge";
+import { Chip } from "@/ui/chip";
+import { Divider } from "@/ui/divider";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
@@ -70,25 +73,7 @@ export default function TradeScreen() {
           <View style={{ gap: 14 }}>
             <Row>
               <H2>Swap</H2>
-              <View
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: blocked ? "rgba(255,159,10,0.35)" : "rgba(48,209,88,0.28)",
-                  backgroundColor: blocked ? "rgba(255,159,10,0.10)" : "rgba(48,209,88,0.10)",
-                }}
-              >
-                <Body
-                  style={{
-                    fontFamily: t.font.bodyMedium,
-                    color: blocked ? t.colors.warn : t.colors.good,
-                  }}
-                >
-                  {blocked ? "Policy check" : "Allowed"}
-                </Body>
-              </View>
+              <Badge label={blocked ? "Policy check" : "Allowed"} tone={blocked ? "warn" : "good"} />
             </Row>
 
             <View style={{ gap: 10 }}>
@@ -111,6 +96,7 @@ export default function TradeScreen() {
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderRadius: t.radius.md,
+                  borderCurve: "continuous",
                   borderWidth: 1,
                   borderColor: t.colors.glassBorder,
                   backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -137,6 +123,7 @@ export default function TradeScreen() {
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderRadius: t.radius.md,
+                  borderCurve: "continuous",
                   borderWidth: 1,
                   borderColor: t.colors.glassBorder,
                   backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -148,7 +135,7 @@ export default function TradeScreen() {
               />
             </View>
 
-            <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+            <Divider />
 
             <View style={{ gap: 10 }}>
               <Row>
@@ -215,7 +202,7 @@ export default function TradeScreen() {
                     </Muted>
                   </View>
 
-                  <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+                  <Divider />
 
                   <View style={{ gap: 10 }}>
                     <Row>
@@ -254,7 +241,6 @@ export default function TradeScreen() {
 }
 
 function TokenRow(props: { label: string; value: Sym; onPick: (s: Sym) => void; disabled: boolean }) {
-  const t = useAppTheme();
   const tokens: Sym[] = ["ETH", "USDC", "STRK"];
   return (
     <View style={{ gap: 8 }}>
@@ -266,31 +252,20 @@ function TokenRow(props: { label: string; value: Sym; onPick: (s: Sym) => void; 
         {tokens.map((s) => {
           const selected = s === props.value;
           return (
-            <Pressable
+            <Chip
               key={s}
-              disabled={props.disabled}
-              onPress={async () => {
-                await haptic("tap");
-                props.onPick(s);
-              }}
-              style={({ pressed }) => ({
-                paddingVertical: 9,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: selected ? "rgba(106,228,215,0.40)" : t.colors.glassBorder,
-                backgroundColor: selected
-                  ? t.scheme === "dark"
-                    ? "rgba(106,228,215,0.12)"
-                    : "rgba(14,142,166,0.10)"
-                  : t.scheme === "dark"
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(255,255,255,0.55)",
-                opacity: pressed ? 0.85 : 1,
-              })}
-            >
-              <Body style={{ fontFamily: t.font.bodyMedium }}>{s}</Body>
-            </Pressable>
+              label={s}
+              selected={selected}
+              tone="accent"
+              onPress={
+                props.disabled
+                  ? undefined
+                  : async () => {
+                      await haptic("tap");
+                      props.onPick(s);
+                    }
+              }
+            />
           );
         })}
       </View>

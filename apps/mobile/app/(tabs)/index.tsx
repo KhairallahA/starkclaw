@@ -4,14 +4,17 @@ import { useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { useDemo } from "@/lib/demo/demo-store";
-import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { GhostButton, IconButton, PrimaryButton } from "@/ui/buttons";
 import { AppIcon } from "@/ui/app-icon";
+import { Badge } from "@/ui/badge";
+import { Chip } from "@/ui/chip";
+import { Divider } from "@/ui/divider";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
 import { AppScreen, Row } from "@/ui/screen";
 import { formatPct, formatUsd } from "@/ui/format";
-import { Body, H1, H2, Metric, Mono, Muted } from "@/ui/typography";
+import { Body, Display, H2, Metric, Mono, Muted } from "@/ui/typography";
 
 function portfolioTotalUsd(balances: { amount: number; usdPrice: number }[]): number {
   return balances.reduce((sum, b) => sum + b.amount * b.usdPrice, 0);
@@ -37,25 +40,15 @@ export default function HomeScreen() {
         <Row>
           <View style={{ gap: 4 }}>
             <Muted>{name ? `Welcome back, ${name}` : "Welcome back"}</Muted>
-            <H1>Starkclaw</H1>
+            <Display>Starkclaw</Display>
           </View>
-          <Pressable
+          <IconButton
             onPress={async () => {
               await haptic("tap");
               router.push("/modal");
             }}
-            style={({ pressed }) => ({
-              paddingVertical: 10,
-              paddingHorizontal: 10,
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: t.colors.glassBorder,
-              backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.65)",
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <AppIcon ios="gearshape.fill" fa="gear" color={t.colors.text} size={18} />
-          </Pressable>
+            icon={<AppIcon ios="gearshape.fill" fa="gear" color={t.colors.text} size={18} />}
+          />
         </Row>
       </Animated.View>
 
@@ -75,7 +68,7 @@ export default function HomeScreen() {
               </View>
             </Row>
 
-            <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+            <Divider />
 
             <View style={{ gap: 10 }}>
               {state.portfolio.balances.map((b) => {
@@ -105,20 +98,10 @@ export default function HomeScreen() {
           <View style={{ gap: 10 }}>
             <Row>
               <H2>Safety status</H2>
-              <View
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: state.policy.emergencyLockdown ? "rgba(255,69,58,0.40)" : "rgba(48,209,88,0.32)",
-                  backgroundColor: state.policy.emergencyLockdown ? "rgba(255,69,58,0.10)" : "rgba(48,209,88,0.10)",
-                }}
-              >
-                <Body style={{ fontFamily: t.font.bodyMedium, color: state.policy.emergencyLockdown ? t.colors.bad : t.colors.good }}>
-                  {state.policy.emergencyLockdown ? "Locked" : "Protected"}
-                </Body>
-              </View>
+              <Badge
+                label={state.policy.emergencyLockdown ? "Locked" : "Protected"}
+                tone={state.policy.emergencyLockdown ? "danger" : "good"}
+              />
             </Row>
 
             <Row>
@@ -145,7 +128,7 @@ export default function HomeScreen() {
               <Body style={{ fontFamily: t.font.bodyMedium }}>{state.agent.autopilotEnabled ? "On" : "Off"}</Body>
             </Row>
 
-            <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+            <Divider />
 
             <View style={{ gap: 10 }}>
               <Row>
@@ -165,18 +148,7 @@ export default function HomeScreen() {
           <View style={{ gap: 12 }}>
             <Row>
               <H2>Ask Starkclaw</H2>
-              <View
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: t.colors.glassBorder,
-                  backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)",
-                }}
-              >
-                <Body style={{ fontFamily: t.font.bodyMedium, color: t.colors.muted }}>Mocked</Body>
-              </View>
+              <Badge label="Mocked" tone="neutral" />
             </Row>
 
             <TextInput
@@ -284,7 +256,7 @@ export default function HomeScreen() {
                     <Muted>{timeAgo(it.createdAt)}</Muted>
                   </Row>
                   {it.subtitle ? <Muted>{it.subtitle}</Muted> : null}
-                  <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+                  <Divider />
                 </View>
               ))}
             </View>
@@ -347,24 +319,13 @@ function timeAgo(createdAtSec: number): string {
 }
 
 function PromptChip(props: { label: string; onPress: () => void }) {
-  const t = useAppTheme();
   return (
-    <Pressable
+    <Chip
+      label={props.label}
       onPress={async () => {
         await haptic("tap");
         props.onPress();
       }}
-      style={({ pressed }) => ({
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: t.colors.glassBorder,
-        backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)",
-        opacity: pressed ? 0.85 : 1,
-      })}
-    >
-      <Body style={{ fontFamily: t.font.bodyMedium, color: t.colors.text }}>{props.label}</Body>
-    </Pressable>
+    />
   );
 }

@@ -1,15 +1,16 @@
 import * as React from "react";
-import { Pressable, TextInput, View } from "react-native";
+import { TextInput, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { useDemo } from "@/lib/demo/demo-store";
 import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { Chip } from "@/ui/chip";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
 import { AppScreen, Row } from "@/ui/screen";
-import { Body, H1, H2, Muted } from "@/ui/typography";
+import { H1, H2, Muted } from "@/ui/typography";
 
 function toNumberOr(n: string, fallback: number): number {
   const x = Number(n);
@@ -52,6 +53,7 @@ export default function OnboardingLimitsScreen() {
                 paddingVertical: 12,
                 paddingHorizontal: 12,
                 borderRadius: t.radius.md,
+                borderCurve: "continuous",
                 borderWidth: 1,
                 borderColor: t.colors.glassBorder,
                 backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -84,6 +86,7 @@ export default function OnboardingLimitsScreen() {
                 paddingVertical: 12,
                 paddingHorizontal: 12,
                 borderRadius: t.radius.md,
+                borderCurve: "continuous",
                 borderWidth: 1,
                 borderColor: t.colors.glassBorder,
                 backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -121,30 +124,18 @@ export default function OnboardingLimitsScreen() {
 }
 
 function QuickChips(props: { values: number[]; onPick: (v: number) => void }) {
-  const t = useAppTheme();
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
       {props.values.map((v) => (
-        <Pressable
+        <Chip
           key={v}
+          label={`$${v}`}
           onPress={async () => {
             await haptic("tap");
             props.onPick(v);
           }}
-          style={({ pressed }) => ({
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: t.colors.glassBorder,
-            backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)",
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Body style={{ fontFamily: t.font.bodyMedium, fontVariant: ["tabular-nums"] }}>${v}</Body>
-        </Pressable>
+        />
       ))}
     </View>
   );
 }
-

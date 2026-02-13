@@ -1,14 +1,15 @@
 import * as React from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useRouter } from "expo-router";
 
 import { useDemo } from "@/lib/demo/demo-store";
-import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { GhostButton, IconButton, PrimaryButton } from "@/ui/buttons";
+import { AppIcon } from "@/ui/app-icon";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
 import { AppScreen, Row } from "@/ui/screen";
-import { Body, H1, H2, Mono, Muted } from "@/ui/typography";
+import { H1, H2, Mono, Muted } from "@/ui/typography";
 
 export default function DemoSettingsModal() {
   const t = useAppTheme();
@@ -22,15 +23,13 @@ export default function DemoSettingsModal() {
           <Muted>Demo</Muted>
           <H1>Settings</H1>
         </View>
-        <Pressable
+        <IconButton
           onPress={async () => {
             await haptic("tap");
             router.back();
           }}
-          style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
-        >
-          <Body style={{ fontFamily: t.font.bodyMedium, color: t.colors.accent2 }}>Close</Body>
-        </Pressable>
+          icon={<AppIcon ios="xmark" fa="times" color={t.colors.text} size={18} />}
+        />
       </Row>
 
       <GlassCard>

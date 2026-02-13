@@ -61,11 +61,11 @@ export function useAppTheme(): AppTheme {
       },
       radius: { sm: 12, md: 16, lg: 20, xl: 28, pill: 999 },
       shadow: {
-        card: "0 16px 40px rgba(8,18,32,0.14)",
-        lift: "0 22px 60px rgba(8,18,32,0.16)",
+        card: "0 14px 40px rgba(8,18,32,0.12)",
+        lift: "0 20px 64px rgba(8,18,32,0.16)",
       },
       font: {
-        display: "InstrumentSerif_400Regular",
+        display: "PlaywriteNZBasic_400Regular",
         body: "InstrumentSans_400Regular",
         bodyMedium: "InstrumentSans_500Medium",
         bodySemibold: "InstrumentSans_600SemiBold",
@@ -92,11 +92,11 @@ export function useAppTheme(): AppTheme {
     },
     radius: { sm: 12, md: 16, lg: 20, xl: 28, pill: 999 },
     shadow: {
-      card: "0 22px 70px rgba(0,0,0,0.55)",
-      lift: "0 30px 90px rgba(0,0,0,0.60)",
+      card: "0 18px 60px rgba(0,0,0,0.45)",
+      lift: "0 26px 86px rgba(0,0,0,0.55)",
     },
     font: {
-      display: "InstrumentSerif_400Regular",
+      display: "PlaywriteNZBasic_400Regular",
       body: "InstrumentSans_400Regular",
       bodyMedium: "InstrumentSans_500Medium",
       bodySemibold: "InstrumentSans_600SemiBold",
@@ -120,4 +120,3 @@ export function navThemeFromAppTheme(t: AppTheme): Theme {
     },
   };
 }
-

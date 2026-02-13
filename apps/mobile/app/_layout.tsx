@@ -2,6 +2,7 @@ import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { ThemeProvider } from "@react-navigation/native";
 import { InstrumentSans_400Regular, InstrumentSans_500Medium, InstrumentSans_600SemiBold } from "@expo-google-fonts/instrument-sans";
 import { InstrumentSerif_400Regular } from "@expo-google-fonts/instrument-serif";
+import { PlaywriteNZBasic_300Light, PlaywriteNZBasic_400Regular } from "@expo-google-fonts/playwrite-nz-basic";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
@@ -32,6 +33,8 @@ export default function RootLayout() {
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,
     InstrumentSerif_400Regular,
+    PlaywriteNZBasic_300Light,
+    PlaywriteNZBasic_400Regular,
     ...FontAwesome.font,
   });
 

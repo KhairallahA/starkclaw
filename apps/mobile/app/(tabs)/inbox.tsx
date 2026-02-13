@@ -4,6 +4,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { useDemo } from "@/lib/demo/demo-store";
 import { GhostButton } from "@/ui/buttons";
+import { Divider } from "@/ui/divider";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
@@ -150,7 +151,7 @@ function ActivityRow(props: { title: string; subtitle: string; when: string; met
       </Row>
       {props.subtitle ? <Muted>{props.subtitle}</Muted> : null}
       {props.meta ? <Muted style={{ color: t.colors.muted }}>{props.meta}</Muted> : null}
-      <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+      <Divider />
     </View>
   );
 }

@@ -1,6 +1,8 @@
 import * as React from "react";
 import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAppTheme } from "@/ui/app-theme";
@@ -26,15 +28,33 @@ export default function TabLayout() {
           paddingTop: 8,
         },
         tabBarBackground: () => (
-          <BlurView
-            intensity={t.scheme === "dark" ? 18 : 55}
-            tint={t.scheme === "dark" ? "dark" : "light"}
-            style={{
-              flex: 1,
-              borderTopWidth: 1,
-              borderColor: t.colors.glassBorder,
-            }}
-          />
+          <View style={{ flex: 1 }}>
+            <BlurView
+              intensity={t.scheme === "dark" ? 18 : 55}
+              tint={t.scheme === "dark" ? "dark" : "light"}
+              style={StyleSheet.absoluteFill}
+            />
+            <LinearGradient
+              colors={
+                t.scheme === "dark"
+                  ? (["rgba(255,255,255,0.10)", "rgba(255,255,255,0.00)"] as const)
+                  : (["rgba(255,255,255,0.55)", "rgba(255,255,255,0.00)"] as const)
+              }
+              start={{ x: 0.5, y: 0.0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 1,
+                backgroundColor: t.colors.glassBorder,
+              }}
+            />
+          </View>
         ),
         tabBarLabelStyle: {
           fontFamily: t.font.bodyMedium,

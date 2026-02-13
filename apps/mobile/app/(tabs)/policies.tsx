@@ -5,6 +5,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useDemo } from "@/lib/demo/demo-store";
 import { requireOwnerAuth } from "@/lib/security/owner-auth";
 import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { Chip } from "@/ui/chip";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
@@ -71,6 +72,7 @@ export default function PoliciesScreen() {
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderRadius: t.radius.md,
+                  borderCurve: "continuous",
                   borderWidth: 1,
                   borderColor: t.colors.glassBorder,
                   backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -98,6 +100,7 @@ export default function PoliciesScreen() {
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderRadius: t.radius.md,
+                  borderCurve: "continuous",
                   borderWidth: 1,
                   borderColor: t.colors.glassBorder,
                   backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -145,6 +148,7 @@ export default function PoliciesScreen() {
                   paddingVertical: 12,
                   paddingHorizontal: 12,
                   borderRadius: t.radius.md,
+                  borderCurve: "continuous",
                   borderWidth: 1,
                   borderColor: t.colors.glassBorder,
                   backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.6)",
@@ -243,28 +247,17 @@ export default function PoliciesScreen() {
 }
 
 function QuickChips(props: { values: number[]; onPick: (v: number) => void }) {
-  const t = useAppTheme();
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
       {props.values.map((v) => (
-        <Pressable
+        <Chip
           key={v}
+          label={`$${v}`}
           onPress={async () => {
             await haptic("tap");
             props.onPick(v);
           }}
-          style={({ pressed }) => ({
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            borderWidth: 1,
-            borderColor: t.colors.glassBorder,
-            backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)",
-            opacity: pressed ? 0.85 : 1,
-          })}
-        >
-          <Body style={{ fontFamily: t.font.bodyMedium, fontVariant: ["tabular-nums"] }}>${v}</Body>
-        </Pressable>
+        />
       ))}
     </View>
   );

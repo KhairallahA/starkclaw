@@ -1,6 +1,7 @@
 import * as React from "react";
-import { type StyleProp, type ViewStyle, View } from "react-native";
+import { StyleSheet, type StyleProp, type ViewStyle, View } from "react-native";
 import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { useAppTheme } from "./app-theme";
 
@@ -14,23 +15,37 @@ export function GlassCard(props: {
   const pad = props.padding ?? 14;
   const intensity = props.intensity ?? (t.scheme === "dark" ? 22 : 40);
   const tint = t.scheme === "dark" ? "dark" : "light";
+  const borderA = t.scheme === "dark" ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.92)";
+  const borderB = t.scheme === "dark" ? "rgba(255,255,255,0.08)" : "rgba(8,18,32,0.10)";
+  const highlightA = t.scheme === "dark" ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.45)";
+  const highlightB = "rgba(255,255,255,0.0)";
 
   return (
-      <View style={[{ borderRadius: t.radius.xl, boxShadow: t.shadow.card }, props.style]}>
-      <View
-        style={{
-          borderRadius: t.radius.xl,
-          borderCurve: "continuous",
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: t.colors.glassBorder,
-          backgroundColor: t.colors.glassFill,
-        }}
+    <View style={[{ borderRadius: t.radius.xl, borderCurve: "continuous", boxShadow: t.shadow.card }, props.style]}>
+      <LinearGradient
+        colors={[borderA, borderB]}
+        start={{ x: 0.1, y: 0.0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={{ borderRadius: t.radius.xl, borderCurve: "continuous", padding: 1 }}
       >
-        <BlurView intensity={intensity} tint={tint} style={{ padding: pad }}>
-          {props.children}
-        </BlurView>
-      </View>
+        <View
+          style={{
+            borderRadius: t.radius.xl - 1,
+            borderCurve: "continuous",
+            overflow: "hidden",
+            backgroundColor: t.colors.glassFill,
+            borderWidth: 1,
+            borderColor: t.colors.glassBorder,
+          }}
+        >
+          <BlurView intensity={intensity} tint={tint} style={{ padding: pad }}>
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <LinearGradient colors={[highlightA, highlightB]} start={{ x: 0, y: 0 }} end={{ x: 0.2, y: 1 }} style={StyleSheet.absoluteFill} />
+            </View>
+            {props.children}
+          </BlurView>
+        </View>
+      </LinearGradient>
     </View>
   );
 }

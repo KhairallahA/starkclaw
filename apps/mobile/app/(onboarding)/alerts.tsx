@@ -1,10 +1,12 @@
 import * as React from "react";
-import { Pressable, Switch, View } from "react-native";
+import { Switch, View } from "react-native";
 import { useRouter } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 
 import { useDemo } from "@/lib/demo/demo-store";
 import { GhostButton, PrimaryButton } from "@/ui/buttons";
+import { Chip } from "@/ui/chip";
+import { Divider } from "@/ui/divider";
 import { GlassCard } from "@/ui/glass-card";
 import { haptic } from "@/ui/haptics";
 import { useAppTheme } from "@/ui/app-theme";
@@ -12,7 +14,6 @@ import { AppScreen, Row } from "@/ui/screen";
 import { Body, H1, H2, Muted } from "@/ui/typography";
 
 export default function OnboardingAlertsScreen() {
-  const t = useAppTheme();
   const router = useRouter();
   const { state, actions } = useDemo();
 
@@ -66,23 +67,13 @@ export default function OnboardingAlertsScreen() {
               onChange={(v) => actions.setAlertPref("agentDigest", v)}
             />
             <Row style={{ marginTop: 4 }}>
-              <Pressable
+              <Chip
+                label="Trigger test alert"
                 onPress={async () => {
                   await haptic("tap");
                   actions.triggerAlert("Test alert", "This is a demo notification preview.");
                 }}
-                style={({ pressed }) => ({
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: t.colors.glassBorder,
-                  backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.55)",
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <Body style={{ fontFamily: t.font.bodyMedium }}>Trigger test alert</Body>
-              </Pressable>
+              />
               <Muted>Optional</Muted>
             </Row>
           </View>
@@ -133,8 +124,7 @@ function ToggleRow(props: {
           thumbColor={t.scheme === "dark" ? "#FFFFFF" : "#FFFFFF"}
         />
       </Row>
-      <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+      <Divider />
     </View>
   );
 }
-
