@@ -4,7 +4,7 @@ Last updated: 2026-02-13
 
 ## Current Milestone
 
-M03: Deploy Starkclaw Account From Mobile
+M05: Agent Runtime v0 (Chat + Tool Calls)
 
 ## Completed
 
@@ -14,16 +14,18 @@ M03: Deploy Starkclaw Account From Mobile
 - M00 bootstrap: Expo app scaffold + Cairo sanity package + deterministic scripts + CI.
 - M01 baseline safety rails: vendored `contracts/agent-account` and wired into `scripts/contracts/test`.
 - M02 wallet core: deterministic account address + RPC reads (balances, chain id).
+- M03 deploy from mobile: funding UX + deploy account transaction flow.
+- M04 policy UI: create/register/revoke session keys with on-chain policy.
 
 ## In Progress
 
-- M03: Deploy account from mobile (Sepolia)
+- M05: Agent runtime v0 (chat UI + safe tools)
 
 ## Next Up
 
-1. Add a Policies screen: create/register/revoke session keys with on-chain policy (M04).
-2. Add Agent chat + tool runtime with transfer preview cards (M05).
-3. End-to-end constrained transfer demo + denial UX (M06).
+1. Add transfer proposal cards + execute flow using session key signature (M06).
+2. Add tx/activity log UI (M06).
+3. Hardening: better error messages + audit log export (M09 subset).
 
 ## How To Verify
 
@@ -38,3 +40,6 @@ Manual MVP smoke (Sepolia):
 3. Tap `Faucet` and fund the displayed account address with Sepolia ETH.
 4. Back in the app, tap `Refresh` until ETH balance is non-zero.
 5. Tap `Deploy Account` and wait for confirmation.
+6. Go to `Policies`:
+   - Create + register a session key for a token (start with ETH/STRK if USDC is unavailable).
+   - Revoke it (or emergency revoke all) and confirm it shows invalid on-chain after refresh.
