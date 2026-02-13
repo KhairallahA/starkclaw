@@ -1,6 +1,13 @@
 import { validateAndParseAddress } from "starknet";
 
 import { getSessionPrivateKey, listSessionKeys, type StoredSessionKey } from "../policy/session-keys";
+import { KeyringProxySigner } from "../signer/keyring-proxy-signer";
+import {
+  type SignerMode,
+  SignerRuntimeConfigError,
+  getSignerMode,
+  loadRemoteSignerRuntimeConfig,
+} from "../signer/runtime-config";
 import { createSessionAccount } from "../starknet/account";
 import { getErc20Balance } from "../starknet/balances";
 import { TOKENS, type StarknetTokenSymbol } from "../starknet/tokens";
@@ -117,47 +124,131 @@ function extractExecutionStatus(receipt: unknown): string | null {
   return typeof v === "string" ? v : null;
 }
 
+function createMobileActionId(): string {
+  return `mobile_action_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function mapRemoteSignerError(err: unknown): Error {
+  if (err instanceof SignerRuntimeConfigError) {
+    return err;
+  }
+  const msg = err instanceof Error ? err.message : String(err);
+
+  if (/Keyring proxy request timed out/i.test(msg)) {
+    return new Error("Signer timeout. Retry the transfer.");
+  }
+  if (/Keyring proxy error \(401\)/i.test(msg)) {
+    if (/nonce|replay/i.test(msg)) {
+      return new Error("Signer rejected replayed nonce. Retry with a fresh request.");
+    }
+    return new Error("Signer authentication failed (401). Check remote signer credentials.");
+  }
+  if (/Keyring proxy error \((403|422)\)/i.test(msg)) {
+    return new Error("Signer policy denied this transfer. Review session policy and limits.");
+  }
+  if (/INSECURE_TRANSPORT|MTLS_REQUIRED/i.test(msg)) {
+    return new Error(msg);
+  }
+  return err instanceof Error ? err : new Error(msg);
+}
+
 export async function executeTransfer(params: {
   wallet: WalletSnapshot;
   action: TransferAction;
+  mobileActionId?: string;
+  requester?: string;
+  tool?: string;
 }): Promise<{
   txHash: string;
   executionStatus: string | null;
   revertReason: string | null;
+  signerMode: SignerMode;
+  signerRequestId: string | null;
+  mobileActionId: string;
 }> {
-  const pk = await getSessionPrivateKey(params.action.sessionPublicKey);
-  if (!pk) throw new Error("Missing session private key. Create a new session key in Policies.");
+  const signerMode = getSignerMode();
+  const mobileActionId = params.mobileActionId ?? createMobileActionId();
+  let signerRequestId: string | null = null;
+  let sessionAccount: ReturnType<typeof createSessionAccount>;
+  let remoteSigner: KeyringProxySigner | null = null;
 
-  const account = createSessionAccount({
-    rpcUrl: params.wallet.rpcUrl,
-    accountAddress: params.wallet.accountAddress,
-    sessionPrivateKey: pk,
-    sessionPublicKey: params.action.sessionPublicKey,
-  });
+  if (signerMode === "remote") {
+    try {
+      const remoteConfig = await loadRemoteSignerRuntimeConfig();
+      remoteSigner = new KeyringProxySigner({
+        proxyUrl: remoteConfig.proxyUrl,
+        accountAddress: params.wallet.accountAddress,
+        clientId: remoteConfig.clientId,
+        hmacSecret: remoteConfig.hmacSecret,
+        requestTimeoutMs: remoteConfig.requestTimeoutMs,
+        validUntil: params.action.policy.validUntil,
+        keyId: remoteConfig.keyId,
+        requester: params.requester ?? remoteConfig.requester,
+        tool: params.tool ?? "execute_transfer",
+        mobileActionId,
+      });
 
-  const tx = await account.execute({
-    contractAddress: params.action.tokenAddress,
-    entrypoint: "transfer",
-    calldata: params.action.calldata,
-  });
+      sessionAccount = createSessionAccount({
+        rpcUrl: params.wallet.rpcUrl,
+        accountAddress: params.wallet.accountAddress,
+        signer: remoteSigner,
+      });
+    } catch (err) {
+      const mapped = mapRemoteSignerError(err);
+      throw mapped;
+    }
+  } else {
+    const pk = await getSessionPrivateKey(params.action.sessionPublicKey);
+    if (!pk) throw new Error("Missing session private key. Create a new session key in Policies.");
+
+    sessionAccount = createSessionAccount({
+      rpcUrl: params.wallet.rpcUrl,
+      accountAddress: params.wallet.accountAddress,
+      sessionPrivateKey: pk,
+      sessionPublicKey: params.action.sessionPublicKey,
+    });
+  }
+
+  let txHash = "";
+  try {
+    const tx = await sessionAccount.execute({
+      contractAddress: params.action.tokenAddress,
+      entrypoint: "transfer",
+      calldata: params.action.calldata,
+    });
+    txHash = tx.transaction_hash;
+  } catch (err) {
+    if (signerMode === "remote") {
+      const mapped = mapRemoteSignerError(err);
+      throw mapped;
+    }
+    throw err;
+  }
+
+  if (remoteSigner) {
+    signerRequestId = remoteSigner.getLastRequestId() ?? null;
+  }
 
   let receipt: unknown = null;
   try {
-    receipt = await account.waitForTransaction(tx.transaction_hash, {
+    receipt = await sessionAccount.waitForTransaction(txHash, {
       retries: 60,
       retryInterval: 3_000,
     });
   } catch {
     try {
-      receipt = await account.getTransactionReceipt(tx.transaction_hash);
+      receipt = await sessionAccount.getTransactionReceipt(txHash);
     } catch {
       // ignored
     }
   }
 
   return {
-    txHash: tx.transaction_hash,
+    txHash,
     executionStatus: extractExecutionStatus(receipt),
     revertReason: extractRevertReason(receipt),
+    signerMode,
+    signerRequestId,
+    mobileActionId,
   };
 }

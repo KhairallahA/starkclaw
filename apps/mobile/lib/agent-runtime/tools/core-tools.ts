@@ -1,26 +1,60 @@
 /**
- * Core tool definitions for the MVP transfer flow.
+ * Core tool definitions for the transfer/runtime flow.
  *
  * Tools:
- *   get_balances     — Read ERC-20 balances for the wallet
+ *   get_balances     — Read ERC-20 balances for the active wallet
  *   prepare_transfer — Validate + prepare an ERC-20 transfer action
- *   estimate_fee     — Stub: estimate gas for a prepared transfer
- *   execute_transfer — Execute a prepared transfer via session key
- *
- * Each tool wraps existing live library functions and returns structured
- * results that the model can reason about.
+ *   estimate_fee     — Placeholder estimation
+ *   execute_transfer — Execute a prepared ERC-20 transfer
  */
+
+import { executeTransfer, prepareTransferFromText } from "@/lib/agent/transfer";
+import { getErc20Balance } from "@/lib/starknet/balances";
+import { STARKNET_NETWORKS, type StarknetNetworkId } from "@/lib/starknet/networks";
+import { TOKENS, type StarknetTokenSymbol } from "@/lib/starknet/tokens";
+import { loadWallet } from "@/lib/wallet/wallet";
 
 import type { ToolDefinition, ToolResult } from "./types";
 
-// ---------------------------------------------------------------------------
-// get_balances
-// ---------------------------------------------------------------------------
+function formatTokenAmount(value: bigint, decimals: number): string {
+  const base = 10n ** BigInt(decimals);
+  const whole = value / base;
+  const frac = value % base;
+  if (frac === 0n) return whole.toString();
+
+  const fracStr = frac
+    .toString()
+    .padStart(decimals, "0")
+    .replace(/0+$/, "");
+  return `${whole.toString()}.${fracStr}`;
+}
+
+function parseNetwork(value: string): StarknetNetworkId | null {
+  if (value === "sepolia" || value === "mainnet") return value;
+  return null;
+}
+
+function isValidHexAddress(value: string): boolean {
+  return /^0x[0-9a-fA-F]+$/.test(value);
+}
+
+async function loadWalletForNetwork(network: StarknetNetworkId) {
+  const wallet = await loadWallet();
+  if (!wallet) {
+    throw new Error("Wallet not initialized. Complete onboarding and create a wallet first.");
+  }
+  if (wallet.networkId !== network) {
+    throw new Error(
+      `Wallet network mismatch: wallet is on ${wallet.networkId}, tool requested ${network}.`
+    );
+  }
+  return wallet;
+}
 
 export const getBalancesTool: ToolDefinition = {
   name: "get_balances",
   description:
-    "Read the ERC-20 balances (ETH, USDC, STRK) for the connected wallet. Returns token symbols, raw balances, and human-readable amounts.",
+    "Read ERC-20 balances (ETH, USDC, STRK) for the active wallet. Returns raw and human-readable amounts.",
   argsSchema: {
     type: "object",
     properties: {
@@ -33,34 +67,55 @@ export const getBalancesTool: ToolDefinition = {
     required: ["network"],
   },
   async handler(args): Promise<ToolResult> {
-    const network = args.network as string;
-    // Stub: live implementation will call getErc20Balance for each token.
-    return {
-      ok: true,
-      data: {
-        network,
-        balances: [
-          { symbol: "ETH", amount: "0", formatted: "0 ETH" },
-          { symbol: "USDC", amount: "0", formatted: "0 USDC" },
-          { symbol: "STRK", amount: "0", formatted: "0 STRK" },
-        ],
-        note: "Live balance fetching will be wired when wallet lifecycle (#3) lands.",
-      },
-    };
+    try {
+      const network = parseNetwork(String(args.network));
+      if (!network) {
+        return { ok: false, error: 'Invalid network. Use "sepolia" or "mainnet".' };
+      }
+
+      const wallet = await loadWalletForNetwork(network);
+      const balances = await Promise.all(
+        TOKENS.map(async (token) => {
+          const tokenAddress = token.addressByNetwork[network];
+          const amount = await getErc20Balance(wallet.rpcUrl, tokenAddress, wallet.accountAddress);
+          return {
+            symbol: token.symbol,
+            amount: amount.toString(),
+            formatted: `${formatTokenAmount(amount, token.decimals)} ${token.symbol}`,
+          };
+        })
+      );
+
+      return {
+        ok: true,
+        data: {
+          network,
+          rpcUrl: STARKNET_NETWORKS[network].rpcUrl,
+          accountAddress: wallet.accountAddress,
+          balances,
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Failed to load balances.",
+      };
+    }
   },
 };
-
-// ---------------------------------------------------------------------------
-// prepare_transfer
-// ---------------------------------------------------------------------------
 
 export const prepareTransferTool: ToolDefinition = {
   name: "prepare_transfer",
   description:
-    "Validate and prepare an ERC-20 transfer. Returns the transfer action with policy checks and warnings. Does NOT execute.",
+    "Validate and prepare an ERC-20 transfer. Returns transfer payload and policy warnings without executing.",
   argsSchema: {
     type: "object",
     properties: {
+      network: {
+        type: "string",
+        description: "Network to query.",
+        enum: ["sepolia", "mainnet"],
+      },
       tokenSymbol: {
         type: "string",
         description: "Token to transfer.",
@@ -75,43 +130,47 @@ export const prepareTransferTool: ToolDefinition = {
         description: "Recipient Starknet address (0x-prefixed hex).",
       },
     },
-    required: ["tokenSymbol", "amount", "to"],
+    required: ["network", "tokenSymbol", "amount", "to"],
   },
   async handler(args): Promise<ToolResult> {
-    const { tokenSymbol, amount, to } = args as Record<string, string>;
+    try {
+      const network = parseNetwork(String(args.network));
+      if (!network) return { ok: false, error: 'Invalid network. Use "sepolia" or "mainnet".' };
 
-    // Basic input validation.
-    if (!/^0x[0-9a-fA-F]+$/.test(to)) {
-      return { ok: false, error: "Invalid recipient address. Must be 0x-prefixed hex." };
-    }
-    const numAmount = Number(amount);
-    if (!Number.isFinite(numAmount) || numAmount <= 0) {
-      return { ok: false, error: "Amount must be a positive number." };
-    }
+      const tokenSymbol = String(args.tokenSymbol).toUpperCase() as StarknetTokenSymbol;
+      const amount = String(args.amount);
+      const to = String(args.to);
 
-    // Stub: live implementation will call prepareTransferFromText.
-    return {
-      ok: true,
-      data: {
-        kind: "erc20_transfer",
-        tokenSymbol,
-        amount,
-        to,
-        warnings: [],
-        note: "Live transfer preparation will be wired when wallet lifecycle (#3) and session keys (#6) land.",
-      },
-    };
+      if (!isValidHexAddress(to)) {
+        return { ok: false, error: "Invalid recipient address. Must be 0x-prefixed hex." };
+      }
+
+      const wallet = await loadWalletForNetwork(network);
+      const action = await prepareTransferFromText({
+        wallet,
+        text: `send ${amount} ${tokenSymbol} to ${to}`,
+      });
+
+      return {
+        ok: true,
+        data: {
+          ...action,
+          network,
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Failed to prepare transfer.",
+      };
+    }
   },
 };
-
-// ---------------------------------------------------------------------------
-// estimate_fee
-// ---------------------------------------------------------------------------
 
 export const estimateFeeTool: ToolDefinition = {
   name: "estimate_fee",
   description:
-    "Estimate the gas fee for a prepared transfer. Returns the estimated fee in STRK.",
+    "Estimate gas fee for a prepared transfer. Returns a conservative placeholder until simulation wiring lands.",
   argsSchema: {
     type: "object",
     properties: {
@@ -132,29 +191,29 @@ export const estimateFeeTool: ToolDefinition = {
     required: ["tokenSymbol", "amount", "to"],
   },
   async handler(): Promise<ToolResult> {
-    // Stub: live implementation will simulate the transaction.
     return {
       ok: true,
       data: {
         estimatedFeeStrk: "0.001",
         estimatedFeeUsd: "$0.002",
-        note: "Live fee estimation will be wired when account deployment (#5) lands.",
+        note: "Simulation-based fee estimation will be wired in a dedicated follow-up.",
       },
     };
   },
 };
 
-// ---------------------------------------------------------------------------
-// execute_transfer
-// ---------------------------------------------------------------------------
-
 export const executeTransferTool: ToolDefinition = {
   name: "execute_transfer",
   description:
-    "Execute a prepared ERC-20 transfer using a session key. Returns the transaction hash.",
+    "Execute an ERC-20 transfer using session signing (local or remote signer mode). Returns tx hash + signer correlation IDs.",
   argsSchema: {
     type: "object",
     properties: {
+      network: {
+        type: "string",
+        description: "Network to execute on.",
+        enum: ["sepolia", "mainnet"],
+      },
       tokenSymbol: {
         type: "string",
         description: "Token to transfer.",
@@ -168,35 +227,63 @@ export const executeTransferTool: ToolDefinition = {
         type: "string",
         description: "Recipient address.",
       },
+      mobileActionId: {
+        type: "string",
+        description: "Optional external correlation id for audit traceability.",
+      },
     },
-    required: ["tokenSymbol", "amount", "to"],
+    required: ["network", "tokenSymbol", "amount", "to"],
   },
   async handler(args): Promise<ToolResult> {
-    const { tokenSymbol, amount, to } = args as Record<string, string>;
+    try {
+      const network = parseNetwork(String(args.network));
+      if (!network) return { ok: false, error: 'Invalid network. Use "sepolia" or "mainnet".' };
 
-    // Basic input validation.
-    if (!/^0x[0-9a-fA-F]+$/.test(to)) {
-      return { ok: false, error: "Invalid recipient address." };
+      const tokenSymbol = String(args.tokenSymbol).toUpperCase() as StarknetTokenSymbol;
+      const amount = String(args.amount);
+      const to = String(args.to);
+      const mobileActionId = args.mobileActionId ? String(args.mobileActionId) : undefined;
+
+      if (!isValidHexAddress(to)) {
+        return { ok: false, error: "Invalid recipient address." };
+      }
+
+      const wallet = await loadWalletForNetwork(network);
+      const action = await prepareTransferFromText({
+        wallet,
+        text: `send ${amount} ${tokenSymbol} to ${to}`,
+      });
+
+      const execution = await executeTransfer({
+        wallet,
+        action,
+        requester: "starkclaw-mobile",
+        tool: "execute_transfer",
+        mobileActionId,
+      });
+
+      return {
+        ok: true,
+        data: {
+          txHash: execution.txHash,
+          executionStatus: execution.executionStatus,
+          revertReason: execution.revertReason,
+          signerMode: execution.signerMode,
+          signerRequestId: execution.signerRequestId,
+          mobileActionId: execution.mobileActionId,
+          tokenSymbol,
+          amount,
+          to,
+        },
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : "Transfer execution failed.",
+      };
     }
-
-    // Stub: live implementation will call executeTransfer from lib/agent/transfer.ts.
-    return {
-      ok: true,
-      data: {
-        txHash: null,
-        tokenSymbol,
-        amount,
-        to,
-        status: "stubbed",
-        note: "Live transfer execution will be wired when session keys (#6) land.",
-      },
-    };
   },
 };
-
-// ---------------------------------------------------------------------------
-// All core tools
-// ---------------------------------------------------------------------------
 
 export const CORE_TOOLS: ToolDefinition[] = [
   getBalancesTool,

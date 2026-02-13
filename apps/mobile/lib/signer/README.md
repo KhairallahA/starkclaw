@@ -1,13 +1,19 @@
 # SISNA Signer Client
 
 **Issue:** #54
-**Status:** Groundwork only (no execution wiring)
+**Status:** Groundwork + runtime execution wiring
 
 ## Overview
 
 Typed HTTP client for remote session transaction signing via SISNA (Starknet Independent Session Network Architecture).
 
-This module provides the **interface and error handling** for communicating with remote signer services, but does **NOT** wire into actual transfer execution paths (that integration is handled separately in #51).
+This folder now has two layers:
+
+- `client.ts`: generic typed HTTP client + error mapping (groundwork).
+- `keyring-proxy-signer.ts`: Starknet `SignerInterface` implementation that signs through SISNA keyring proxy with HMAC headers.
+- `runtime-config.ts`: remote/local mode config loader with production transport guards.
+
+Execution wiring uses `keyring-proxy-signer.ts` in remote mode.
 
 ## Module Contract
 
@@ -25,7 +31,31 @@ Remote Signer → 200 + signature → SignSessionTransactionResponse
              → network timeout → mapNetworkErrorToSignerError → SignerClientError
 ```
 
-## Usage
+## Runtime Usage
+
+```typescript
+import { getSignerMode, loadRemoteSignerRuntimeConfig } from "@/lib/signer/runtime-config";
+import { KeyringProxySigner } from "@/lib/signer/keyring-proxy-signer";
+
+if (getSignerMode() === "remote") {
+  const cfg = await loadRemoteSignerRuntimeConfig();
+
+  const signer = new KeyringProxySigner({
+    proxyUrl: cfg.proxyUrl,
+    accountAddress: "0x...",
+    clientId: cfg.clientId,
+    hmacSecret: cfg.hmacSecret,
+    requestTimeoutMs: cfg.requestTimeoutMs,
+    validUntil: 1735689600,
+    keyId: cfg.keyId,
+    requester: cfg.requester,
+    tool: "execute_transfer",
+    mobileActionId: "mobile_action_123",
+  });
+}
+```
+
+## Legacy Groundwork Usage
 
 ```typescript
 import { createSignerClient } from '@/lib/signer/client';
@@ -126,12 +156,9 @@ class SignerClientError extends Error {
 
 This module explicitly does **NOT** include:
 
-- ❌ Actual transfer execution wiring
-- ❌ Session signature format changes (owned by #51)
+- ❌ Session signature format migration logic itself (owned by #51)
 - ❌ `contracts/agent-account/**` modifications
-- ❌ `apps/mobile/lib/starknet/session-signer.ts` changes
-
-These integrations will be handled in a separate PR after signature migration is complete.
+- ❌ mTLS certificate handling in mobile client runtime (enforced server-side; client enforces transport policy only)
 
 ## Testing
 
@@ -140,7 +167,7 @@ These integrations will be handled in a separate PR after signature migration is
 ./scripts/test/signer-client.sh
 
 # Run with coverage
-npm test -- --coverage apps/mobile/lib/signer
+npm --prefix apps/mobile test -- --run --coverage lib/signer
 ```
 
 ## Migration Context
@@ -152,19 +179,19 @@ See [SESSION_ACCOUNT_MIGRATION_MAP.md](../../../../docs/security/SESSION_ACCOUNT
 ```
 ┌─────────────────────────┐
 │  Starkclaw Mobile App   │
-│  (execution layer)      │  ← NOT in this PR
+│  (execution layer)      │
 └───────────┬─────────────┘
             │
-            │ (future integration)
+            │ execute_transfer
             ▼
 ┌─────────────────────────┐
-│  Signer Client Module   │  ← THIS MODULE (#54)
-│  • Typed requests       │
-│  • Error mapping        │
-│  • Network transport    │
+│  KeyringProxySigner     │
+│  • HMAC auth headers    │
+│  • 4-felt response      │
+│  • request correlation  │
 └───────────┬─────────────┘
             │
-            │ HTTPS + API key
+            │ HTTPS + HMAC
             ▼
 ┌─────────────────────────┐
 │  Remote SISNA Signer    │
@@ -178,7 +205,6 @@ See [SESSION_ACCOUNT_MIGRATION_MAP.md](../../../../docs/security/SESSION_ACCOUNT
 
 - All changes must include tests (TDD-first)
 - Error mappings must be deterministic
-- No execution wiring until #51 merges
 - Keep commits small and auditable
 
 ## References
