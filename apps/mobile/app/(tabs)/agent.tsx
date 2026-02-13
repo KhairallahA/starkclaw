@@ -68,6 +68,7 @@ export default function AgentScreen() {
       const cap = formatUnits(BigInt(action.policy.spendingLimitBaseUnits), dec);
       const bal = formatUnits(BigInt(action.balanceBaseUnits), dec);
       const exp = new Date(action.policy.validUntil * 1000).toLocaleString();
+      const warn = action.warnings.length ? `\nWarning: ${action.warnings.join(" ")}` : "";
 
       setPending(action);
       setMessages((m) => [
@@ -77,7 +78,7 @@ export default function AgentScreen() {
           role: "assistant",
           text: `Proposed transfer: ${action.amount} ${action.tokenSymbol} to ${shorten(
             action.to
-          )}\nBalance: ${bal} ${action.tokenSymbol}\nPolicy: cap ${cap} ${action.tokenSymbol} (expires ${exp})`,
+          )}\nBalance: ${bal} ${action.tokenSymbol}\nPolicy: cap ${cap} ${action.tokenSymbol} (expires ${exp})${warn}`,
         },
       ]);
     } catch (e) {
@@ -218,6 +219,11 @@ export default function AgentScreen() {
                   {formatUnits(BigInt(pending.balanceBaseUnits), tokenDecimals(pending.tokenSymbol))}{" "}
                   {pending.tokenSymbol}
                 </Text>
+                {pending.warnings.length ? (
+                  <Text style={{ fontSize: 12, color: "#ff3b30" }}>
+                    {pending.warnings.join(" ")}
+                  </Text>
+                ) : null}
                 <Text style={{ fontSize: 12, opacity: 0.7 }}>
                   Session key: {shorten(pending.sessionPublicKey)}
                 </Text>

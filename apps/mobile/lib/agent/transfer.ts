@@ -18,6 +18,7 @@ export type TransferAction = {
   balanceBaseUnits: string; // decimal bigint string
   calldata: string[]; // [to, amount_low, amount_high]
   sessionPublicKey: string;
+  warnings: string[];
   policy: {
     spendingLimitBaseUnits: string;
     validUntil: number;
@@ -66,8 +67,9 @@ export async function prepareTransferFromText(params: {
   const now = Math.floor(Date.now() / 1000);
   if (key.validUntil <= now) throw new Error("Session key expired. Create a new one in Policies.");
   if (now < key.validAfter) throw new Error("Session key not yet valid. Create a new one in Policies.");
+  const warnings: string[] = [];
   if (BigInt(key.spendingLimit) < amountUnits) {
-    throw new Error("Amount exceeds the session key cap (local precheck).");
+    warnings.push("Amount exceeds the session key cap; expected to be denied on-chain.");
   }
 
   return {
@@ -80,6 +82,7 @@ export async function prepareTransferFromText(params: {
     balanceBaseUnits: balance.toString(),
     calldata: [to, low, high],
     sessionPublicKey: key.key,
+    warnings,
     policy: {
       spendingLimitBaseUnits: key.spendingLimit,
       validUntil: key.validUntil,
