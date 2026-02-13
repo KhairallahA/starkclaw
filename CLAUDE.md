@@ -28,7 +28,8 @@ Markdown-only repo (no app/contracts yet).
 - `IMPLEMENTATION_PLAN.md`: milestones + acceptance criteria
 - `STATUS.md`: current milestone + verification steps
 - `spec.draft.md`: preserved original notes
-- `.codex/skills/`, `.claude/skills/`: reusable skill packs (treat as vendored)
+- `.claude/skills/`: reusable skill packs (treat as vendored)
+- `.codex` -> `.claude`: symlink (single source of truth is `.claude`)
 </current>
 <target_m00_plus>
 - `apps/mobile/`: Expo app
@@ -81,7 +82,7 @@ No build/test commands exist yet (M00 will introduce them).
 <boundaries>
 <forbidden>
 - Never commit secrets: `.env*`, `**/*keystore*`, `**/*mnemonic*`, `**/*private_key*`, `**/*.pem`, `**/*.key`.
-- Don't edit `.codex/skills/**` or `.claude/skills/**` unless explicitly requested (treat as vendored skill packs).
+- Don't edit `.claude/skills/**` unless explicitly requested (treat as vendored skill packs). (`.codex` is a symlink.)
 - Don't run destructive git commands (`git reset --hard`, history rewrites) unless explicitly asked.
 </forbidden>
 <gated>
@@ -91,5 +92,5 @@ No build/test commands exist yet (M00 will introduce them).
 </boundaries>
 
 <skills>
-Project skills live in `skills/` (project-specific, small). General reusable skills are vendored in `.codex/skills/` and `.claude/skills/`.
+Use the standard skill packs in `.claude/skills/**/SKILL.md`. `.codex` is a symlink for compatibility; do not duplicate skills across both trees.
 </skills>
