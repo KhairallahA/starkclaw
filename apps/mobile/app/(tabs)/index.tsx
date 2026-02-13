@@ -1,369 +1,267 @@
 import * as React from "react";
-import { ActivityIndicator, Pressable, ScrollView } from "react-native";
-import * as WebBrowser from "expo-web-browser";
+import { Pressable, View } from "react-native";
+import { useRouter } from "expo-router";
+import Animated, { FadeInDown } from "react-native-reanimated";
 
-import { Text, View } from "@/components/Themed";
-import { appendActivity, updateActivityByTxHash } from "@/lib/activity/activity";
-import { formatUnits, getErc20Balance } from "@/lib/starknet/balances";
-import { createOwnerAccount } from "@/lib/starknet/account";
-import { AGENT_ACCOUNT_CLASS_HASH } from "@/lib/starknet/contracts";
-import { getChainId, isContractDeployed } from "@/lib/starknet/rpc";
-import { TOKENS } from "@/lib/starknet/tokens";
-import { requireOwnerAuth } from "@/lib/security/owner-auth";
-import {
-  createWallet,
-  loadDeployTxHash,
-  loadOwnerPrivateKey,
-  loadWallet,
-  resetWallet,
-  saveDeployTxHash,
-  type WalletSnapshot,
-} from "@/lib/wallet/wallet";
+import { useDemo } from "@/lib/demo/demo-store";
+import { GhostButton } from "@/ui/buttons";
+import { GlassCard } from "@/ui/glass-card";
+import { haptic } from "@/ui/haptics";
+import { useAppTheme } from "@/ui/app-theme";
+import { AppScreen, Row } from "@/ui/screen";
+import { formatPct, formatUsd } from "@/ui/format";
+import { Body, H1, H2, Mono, Muted } from "@/ui/typography";
 
-type BalanceRow = {
-  symbol: string;
-  display: string;
-};
+function portfolioTotalUsd(balances: { amount: number; usdPrice: number }[]): number {
+  return balances.reduce((sum, b) => sum + b.amount * b.usdPrice, 0);
+}
 
-export default function TabOneScreen() {
-  const [wallet, setWallet] = React.useState<WalletSnapshot | null>(null);
-  const [busy, setBusy] = React.useState(false);
-  const [rpcChainId, setRpcChainId] = React.useState<string | null>(null);
-  const [balances, setBalances] = React.useState<BalanceRow[] | null>(null);
-  const [deployed, setDeployed] = React.useState<boolean | null>(null);
-  const [deployTxHash, setDeployTxHash] = React.useState<string | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+export default function HomeScreen() {
+  const t = useAppTheme();
+  const router = useRouter();
+  const { state, actions } = useDemo();
 
-  const refresh = React.useCallback(async (w: WalletSnapshot) => {
-    setError(null);
-    setBalances(null);
-    setDeployed(null);
+  const name = state.onboarding.displayName.trim();
+  const total = portfolioTotalUsd(state.portfolio.balances);
+  const pending = state.agent.proposals.find((p) => p.status === "pending");
 
-    const chainId = await getChainId(w.rpcUrl);
-    setRpcChainId(chainId);
-
-    const rows: BalanceRow[] = [];
-    for (const t of TOKENS) {
-      const tokenAddress = t.addressByNetwork[w.networkId];
-      const raw = await getErc20Balance(w.rpcUrl, tokenAddress, w.accountAddress);
-      rows.push({ symbol: t.symbol, display: formatUnits(raw, t.decimals) });
-    }
-    setBalances(rows);
-
-    const isDeployed = await isContractDeployed(w.rpcUrl, w.accountAddress);
-    setDeployed(isDeployed);
-  }, []);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setBusy(true);
-      try {
-        const w = await loadWallet();
-        if (cancelled) return;
-        setWallet(w);
-        if (w) setDeployTxHash(await loadDeployTxHash());
-        if (w) await refresh(w);
-      } catch (e) {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Unknown error");
-      } finally {
-        if (!cancelled) setBusy(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [refresh]);
-
-  const onCreate = React.useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const w = await createWallet("sepolia");
-      setWallet(w);
-      await refresh(w);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setBusy(false);
-    }
-  }, [refresh]);
-
-  const onReset = React.useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await resetWallet();
-      setWallet(null);
-      setRpcChainId(null);
-      setBalances(null);
-      setDeployed(null);
-      setDeployTxHash(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  const onOpenFaucet = React.useCallback(async () => {
-    await WebBrowser.openBrowserAsync("https://starknet-faucet.vercel.app/");
-  }, []);
-
-  const onDeploy = React.useCallback(async () => {
-    if (!wallet) return;
-
-    setBusy(true);
-    setError(null);
-    try {
-      await requireOwnerAuth({ reason: "Deploy Starkclaw account" });
-      const ownerPrivateKey = await loadOwnerPrivateKey();
-      if (!ownerPrivateKey) throw new Error("Missing owner key");
-
-      const account = createOwnerAccount({
-        rpcUrl: wallet.rpcUrl,
-        accountAddress: wallet.accountAddress,
-        ownerPrivateKey,
-      });
-
-      const resp = await account.deployAccount({
-        classHash: AGENT_ACCOUNT_CLASS_HASH,
-        constructorCalldata: [wallet.ownerPublicKey, "0x0"],
-        addressSalt: wallet.ownerPublicKey,
-        contractAddress: wallet.accountAddress,
-      });
-
-      setDeployTxHash(resp.transaction_hash);
-      await saveDeployTxHash(resp.transaction_hash);
-
-      await appendActivity({
-        networkId: wallet.networkId,
-        kind: "deploy_account",
-        summary: "Deploy account",
-        txHash: resp.transaction_hash,
-        status: "pending",
-      });
-
-      try {
-        await account.waitForTransaction(resp.transaction_hash, {
-          retries: 60,
-          retryInterval: 3_000,
-        });
-        await updateActivityByTxHash(resp.transaction_hash, { status: "succeeded" });
-      } catch (e) {
-        await updateActivityByTxHash(resp.transaction_hash, {
-          status: "unknown",
-          revertReason: e instanceof Error ? e.message : String(e),
-        });
-        throw e;
-      }
-
-      await refresh(wallet);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown error");
-    } finally {
-      setBusy(false);
-    }
-  }, [wallet, refresh]);
+  const approxChange =
+    state.portfolio.balances.reduce((sum, b) => sum + b.change24hPct * (b.amount * b.usdPrice), 0) /
+    Math.max(1, total);
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic">
-      <View style={{ padding: 20, gap: 16 }}>
-        <View style={{ gap: 6 }}>
-          <Text style={{ fontSize: 28, fontWeight: "700" }}>Starkclaw</Text>
-          <Text style={{ opacity: 0.7 }}>
-            Your agent wallet address is deterministic. Fund it, then deploy the account.
-          </Text>
-        </View>
+    <AppScreen>
+      <Animated.View entering={FadeInDown.duration(420)} style={{ gap: 8 }}>
+        <Muted>{name ? `Welcome back, ${name}` : "Welcome back"}</Muted>
+        <H1>Starkclaw</H1>
+      </Animated.View>
 
-        {error ? (
-          <Text selectable style={{ color: "#ff3b30" }}>
-            {error}
-          </Text>
-        ) : null}
-
-        {wallet ? (
+      <Animated.View entering={FadeInDown.delay(70).duration(420)}>
+        <GlassCard>
           <View style={{ gap: 12 }}>
-            <View style={{ gap: 4 }}>
-              <Text style={{ fontSize: 13, opacity: 0.7 }}>Network</Text>
-              <Text selectable style={{ fontSize: 16, fontWeight: "600" }}>
-                {wallet.networkId} (expected chainId {wallet.chainIdHex})
-              </Text>
-              {rpcChainId ? (
-                <Text selectable style={{ fontSize: 12, opacity: 0.7 }}>
-                  RPC chainId: {rpcChainId}
-                </Text>
-              ) : null}
-            </View>
-
-            <View style={{ gap: 4 }}>
-              <Text style={{ fontSize: 13, opacity: 0.7 }}>Account Address</Text>
-              <Text selectable style={{ fontSize: 14 }}>
-                {wallet.accountAddress}
-              </Text>
-            </View>
-
-            <View style={{ gap: 4 }}>
-              <Text style={{ fontSize: 13, opacity: 0.7 }}>Owner Public Key</Text>
-              <Text selectable style={{ fontSize: 14 }}>
-                {wallet.ownerPublicKey}
-              </Text>
-            </View>
-
-            <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 13, opacity: 0.7 }}>Balances</Text>
-              {balances ? (
-                <View style={{ gap: 6 }}>
-                  {balances.map((b) => (
-                    <View
-                      key={b.symbol}
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "baseline",
-                      }}
-                    >
-                      <Text style={{ fontSize: 16, fontWeight: "600" }}>{b.symbol}</Text>
-                      <Text selectable style={{ fontSize: 16, fontVariant: ["tabular-nums"] }}>
-                        {b.display}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ opacity: 0.7 }}>Fetching...</Text>
-              )}
-            </View>
-
-            <View style={{ gap: 6 }}>
-              <Text style={{ fontSize: 13, opacity: 0.7 }}>Deployment</Text>
-              <Text style={{ fontSize: 16, fontWeight: "600" }}>
-                {deployed === null ? "Checking..." : deployed ? "Deployed" : "Not deployed"}
-              </Text>
-              {!deployed ? (
-                <Text style={{ opacity: 0.7 }}>
-                  Fund this address with Sepolia ETH, then deploy. (Account class hash:{" "}
-                  {AGENT_ACCOUNT_CLASS_HASH.slice(0, 10)}…)
-                </Text>
-              ) : null}
-              {deployTxHash ? (
-                <Text selectable style={{ fontSize: 12, opacity: 0.7 }}>
-                  Last deploy tx: {deployTxHash}
-                </Text>
-              ) : null}
-            </View>
-
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <Pressable
-                disabled={busy}
-                onPress={() => wallet && refresh(wallet)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "rgba(0,0,0,0.12)",
-                  backgroundColor: "rgba(0,0,0,0.04)",
-                }}
-              >
-                <Text style={{ textAlign: "center", fontWeight: "600" }}>Refresh</Text>
-              </Pressable>
-
-              <Pressable
-                disabled={busy}
-                onPress={onOpenFaucet}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: "rgba(0,0,0,0.12)",
-                  backgroundColor: "rgba(0,0,0,0.04)",
-                }}
-              >
-                <Text style={{ textAlign: "center", fontWeight: "600" }}>Faucet</Text>
-              </Pressable>
-            </View>
-
-            {!deployed ? (
-              <View style={{ flexDirection: "row", gap: 12 }}>
-                <Pressable
-                  disabled={busy}
-                  onPress={onDeploy}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 14,
-                    backgroundColor: "#111",
-                  }}
-                >
-                  <Text style={{ textAlign: "center", fontWeight: "700", color: "white" }}>
-                    Deploy Account
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  disabled={busy}
-                  onPress={onReset}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    borderRadius: 14,
-                    borderWidth: 1,
-                    borderColor: "rgba(255,59,48,0.35)",
-                    backgroundColor: "rgba(255,59,48,0.08)",
-                  }}
-                >
-                  <Text style={{ textAlign: "center", fontWeight: "600", color: "#ff3b30" }}>
-                    Reset
-                  </Text>
-                </Pressable>
+            <Row>
+              <View style={{ gap: 2 }}>
+                <Muted>Portfolio</Muted>
+                <Body style={{ fontFamily: t.font.bodySemibold, fontSize: 28, letterSpacing: -0.4, fontVariant: ["tabular-nums"] }}>
+                  {formatUsd(total)}
+                </Body>
               </View>
-            ) : (
-              <Pressable
-                disabled={busy}
-                onPress={onReset}
+              <View style={{ alignItems: "flex-end", gap: 2 }}>
+                <Muted>24h</Muted>
+                <Body style={{ fontFamily: t.font.bodyMedium, color: approxChange >= 0 ? t.colors.good : t.colors.bad }}>
+                  {formatPct(approxChange)}
+                </Body>
+              </View>
+            </Row>
+
+            <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+
+            <View style={{ gap: 10 }}>
+              {state.portfolio.balances.map((b) => {
+                const usd = b.amount * b.usdPrice;
+                return (
+                  <Row key={b.symbol}>
+                    <View style={{ gap: 2 }}>
+                      <Body style={{ fontFamily: t.font.bodyMedium }}>{b.symbol}</Body>
+                      <Muted>{b.name}</Muted>
+                    </View>
+                    <View style={{ alignItems: "flex-end", gap: 2 }}>
+                      <Body style={{ fontFamily: t.font.bodyMedium, fontVariant: ["tabular-nums"] }}>
+                        {b.amount.toLocaleString(undefined, { maximumFractionDigits: b.symbol === "USDC" ? 2 : 4 })}
+                      </Body>
+                      <Muted style={{ fontVariant: ["tabular-nums"] }}>{formatUsd(usd)}</Muted>
+                    </View>
+                  </Row>
+                );
+              })}
+            </View>
+          </View>
+        </GlassCard>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(140).duration(420)}>
+        <GlassCard>
+          <View style={{ gap: 10 }}>
+            <Row>
+              <H2>Safety status</H2>
+              <View
                 style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 14,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 999,
                   borderWidth: 1,
-                  borderColor: "rgba(255,59,48,0.35)",
-                  backgroundColor: "rgba(255,59,48,0.08)",
+                  borderColor: state.policy.emergencyLockdown ? "rgba(255,69,58,0.40)" : "rgba(48,209,88,0.32)",
+                  backgroundColor: state.policy.emergencyLockdown ? "rgba(255,69,58,0.10)" : "rgba(48,209,88,0.10)",
                 }}
               >
-                <Text style={{ textAlign: "center", fontWeight: "600", color: "#ff3b30" }}>
-                  Reset
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        ) : (
-          <Pressable
-            disabled={busy}
-            onPress={onCreate}
-            style={{
-              paddingVertical: 14,
-              paddingHorizontal: 16,
-              borderRadius: 16,
-              backgroundColor: "#111",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.18)",
-            }}
-          >
-            <Text style={{ color: "white", textAlign: "center", fontWeight: "700" }}>
-              Create Wallet
-            </Text>
-          </Pressable>
-        )}
+                <Body style={{ fontFamily: t.font.bodyMedium, color: state.policy.emergencyLockdown ? t.colors.bad : t.colors.good }}>
+                  {state.policy.emergencyLockdown ? "Locked" : "Protected"}
+                </Body>
+              </View>
+            </Row>
 
-        {busy ? <ActivityIndicator /> : null}
-      </View>
-    </ScrollView>
+            <Row>
+              <Muted>Spend caps</Muted>
+              <Body style={{ fontFamily: t.font.bodyMedium }}>
+                {formatUsd(state.policy.dailySpendCapUsd)}/day • {formatUsd(state.policy.perTxCapUsd)}/tx
+              </Body>
+            </Row>
+
+            <Row>
+              <Muted>Recipients</Muted>
+              <Body style={{ fontFamily: t.font.bodyMedium }}>{state.policy.allowlistedRecipients.length} allowlisted</Body>
+            </Row>
+
+            <Row>
+              <Muted>Contracts</Muted>
+              <Body style={{ fontFamily: t.font.bodyMedium, textTransform: "capitalize" }}>
+                {state.policy.contractAllowlistMode.replace("-", " ")}
+              </Body>
+            </Row>
+
+            <Row>
+              <Muted>Autopilot</Muted>
+              <Body style={{ fontFamily: t.font.bodyMedium }}>{state.agent.autopilotEnabled ? "On" : "Off"}</Body>
+            </Row>
+
+            <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+
+            <View style={{ gap: 10 }}>
+              <Row>
+                <Muted>Agent account</Muted>
+                <Mono selectable>
+                  {state.account.address.slice(0, 10)}…{state.account.address.slice(-6)}
+                </Mono>
+              </Row>
+              <Muted>Demo only. No RPC, no signing, no deployments.</Muted>
+            </View>
+          </View>
+        </GlassCard>
+      </Animated.View>
+
+      <Animated.View entering={FadeInDown.delay(200).duration(420)} style={{ gap: 10 }}>
+        <Row style={{ gap: 10 }}>
+          <QuickAction label="Trade" onPress={() => router.push("/trade")} />
+          <QuickAction label="Policies" onPress={() => router.push("/policies")} />
+        </Row>
+        <Row style={{ gap: 10 }}>
+          <QuickAction
+            label="Trigger alert"
+            onPress={() => actions.triggerAlert("Spend cap warning", "A simulated action hit your per-tx cap.")}
+          />
+          <QuickAction
+            label={state.policy.emergencyLockdown ? "Unlock" : "Lockdown"}
+            onPress={() => actions.setEmergencyLockdown(!state.policy.emergencyLockdown)}
+            tone={state.policy.emergencyLockdown ? "good" : "danger"}
+          />
+        </Row>
+      </Animated.View>
+
+      {pending ? (
+        <Animated.View entering={FadeInDown.delay(250).duration(420)}>
+          <GlassCard>
+            <View style={{ gap: 10 }}>
+              <Row>
+                <H2>Pending proposal</H2>
+                <Muted>Agent</Muted>
+              </Row>
+              <Body style={{ fontFamily: t.font.bodySemibold }}>{pending.title}</Body>
+              <Muted>{pending.summary}</Muted>
+              <GhostButton
+                label="Review in Agent"
+                onPress={async () => {
+                  await haptic("tap");
+                  router.push("/agent");
+                }}
+              />
+            </View>
+          </GlassCard>
+        </Animated.View>
+      ) : null}
+
+      <Animated.View entering={FadeInDown.delay(280).duration(420)}>
+        <GlassCard>
+          <View style={{ gap: 12 }}>
+            <Row>
+              <H2>Recent activity</H2>
+              <Pressable
+                onPress={async () => {
+                  await haptic("tap");
+                  router.push("/inbox");
+                }}
+                style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+              >
+                <Body style={{ fontFamily: t.font.bodyMedium, color: t.colors.accent2 }}>View all</Body>
+              </Pressable>
+            </Row>
+
+            <View style={{ gap: 10 }}>
+              {state.activity.slice(0, 4).map((it) => (
+                <View key={it.id} style={{ gap: 4 }}>
+                  <Row>
+                    <Body style={{ fontFamily: t.font.bodyMedium }}>{it.title}</Body>
+                    <Muted>{timeAgo(it.createdAt)}</Muted>
+                  </Row>
+                  {it.subtitle ? <Muted>{it.subtitle}</Muted> : null}
+                  <View style={{ height: 1, backgroundColor: t.colors.faint }} />
+                </View>
+              ))}
+            </View>
+          </View>
+        </GlassCard>
+      </Animated.View>
+    </AppScreen>
   );
 }
+
+function QuickAction(props: { label: string; onPress: () => void; tone?: "normal" | "danger" | "good" }) {
+  const t = useAppTheme();
+  const tone = props.tone ?? "normal";
+  const bg =
+    tone === "danger"
+      ? "rgba(255,69,58,0.12)"
+      : tone === "good"
+        ? "rgba(48,209,88,0.10)"
+        : t.scheme === "dark"
+          ? "rgba(255,255,255,0.06)"
+          : "rgba(255,255,255,0.6)";
+  const border =
+    tone === "danger"
+      ? "rgba(255,69,58,0.28)"
+      : tone === "good"
+        ? "rgba(48,209,88,0.22)"
+        : t.colors.glassBorder;
+
+  return (
+    <Pressable
+      onPress={async () => {
+        await haptic("tap");
+        props.onPress();
+      }}
+      style={({ pressed }) => ({
+        flex: 1,
+        paddingVertical: 12,
+        paddingHorizontal: 12,
+        borderRadius: 18,
+        borderWidth: 1,
+        borderColor: border,
+        backgroundColor: bg,
+        opacity: pressed ? 0.85 : 1,
+      })}
+    >
+      <Body style={{ textAlign: "center", fontFamily: t.font.bodyMedium }}>{props.label}</Body>
+    </Pressable>
+  );
+}
+
+function timeAgo(createdAtSec: number): string {
+  const delta = Math.max(0, Math.floor(Date.now() / 1000) - createdAtSec);
+  if (delta < 60) return "now";
+  const m = Math.floor(delta / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+

@@ -1,71 +1,77 @@
-import React from 'react';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Tabs } from 'expo-router';
-import { Pressable } from 'react-native';
+import * as React from "react";
+import { Tabs } from "expo-router";
+import { BlurView } from "expo-blur";
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
-import { useClientOnlyValue } from '@/components/useClientOnlyValue';
-
-// You can explore the built-in icon families and icons on the web at https://icons.expo.fyi/
-function TabBarIcon(props: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
-  color: string;
-}) {
-  return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
-}
+import { useAppTheme } from "@/ui/app-theme";
+import { AppIcon } from "@/ui/app-icon";
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const t = useAppTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        // Disable the static render of the header on web
-        // to prevent a hydration error in React Navigation v6.
-        headerShown: useClientOnlyValue(false, true),
+        headerShown: false,
+        tabBarActiveTintColor: t.colors.text,
+        tabBarInactiveTintColor: t.scheme === "dark" ? "rgba(234,240,246,0.48)" : "rgba(11,18,32,0.48)",
+        tabBarStyle: {
+          position: "absolute",
+          borderTopWidth: 0,
+          backgroundColor: "transparent",
+          height: 74,
+        },
+        tabBarBackground: () => (
+          <BlurView
+            intensity={t.scheme === "dark" ? 18 : 55}
+            tint={t.scheme === "dark" ? "dark" : "light"}
+            style={{
+              flex: 1,
+              borderTopWidth: 1,
+              borderColor: t.colors.glassBorder,
+            }}
+          />
+        ),
+        tabBarLabelStyle: {
+          fontFamily: t.font.bodyMedium,
+          fontSize: 11,
+          marginTop: -4,
+        },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
-          headerRight: () => (
-            <Link href="/modal" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="info-circle"
-                    size={25}
-                    color={Colors[colorScheme ?? 'light'].text}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),
+          title: "Home",
+          tabBarIcon: ({ color }) => <AppIcon ios="house.fill" fa="home" color={color} size={22} />,
         }}
       />
       <Tabs.Screen
-        name="policies"
+        name="trade"
         options={{
-          title: 'Policies',
-          tabBarIcon: ({ color }) => <TabBarIcon name="key" color={color} />,
+          title: "Trade",
+          tabBarIcon: ({ color }) => (
+            <AppIcon ios="arrow.left.arrow.right" fa="retweet" color={color} size={22} />
+          ),
         }}
       />
       <Tabs.Screen
         name="agent"
         options={{
-          title: 'Agent',
-          tabBarIcon: ({ color }) => <TabBarIcon name="comment" color={color} />,
+          title: "Agent",
+          tabBarIcon: ({ color }) => <AppIcon ios="sparkles" fa="comment" color={color} size={22} />,
         }}
       />
       <Tabs.Screen
-        name="activity"
+        name="policies"
         options={{
-          title: 'Activity',
-          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
+          title: "Policies",
+          tabBarIcon: ({ color }) => <AppIcon ios="slider.horizontal.3" fa="sliders" color={color} size={22} />,
+        }}
+      />
+      <Tabs.Screen
+        name="inbox"
+        options={{
+          title: "Inbox",
+          tabBarIcon: ({ color }) => <AppIcon ios="bell.fill" fa="bell" color={color} size={22} />,
         }}
       />
     </Tabs>
