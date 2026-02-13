@@ -66,6 +66,7 @@ export default function AgentScreen() {
       const action = await prepareTransferFromText({ wallet, text });
       const dec = tokenDecimals(action.tokenSymbol);
       const cap = formatUnits(BigInt(action.policy.spendingLimitBaseUnits), dec);
+      const bal = formatUnits(BigInt(action.balanceBaseUnits), dec);
       const exp = new Date(action.policy.validUntil * 1000).toLocaleString();
 
       setPending(action);
@@ -76,7 +77,7 @@ export default function AgentScreen() {
           role: "assistant",
           text: `Proposed transfer: ${action.amount} ${action.tokenSymbol} to ${shorten(
             action.to
-          )}\nPolicy: cap ${cap} ${action.tokenSymbol} (expires ${exp})`,
+          )}\nBalance: ${bal} ${action.tokenSymbol}\nPolicy: cap ${cap} ${action.tokenSymbol} (expires ${exp})`,
         },
       ]);
     } catch (e) {
@@ -211,6 +212,11 @@ export default function AgentScreen() {
                 <Text style={{ fontWeight: "700" }}>Preview</Text>
                 <Text style={{ opacity: 0.8 }}>
                   {pending.amount} {pending.tokenSymbol} to {shorten(pending.to)}
+                </Text>
+                <Text style={{ fontSize: 12, opacity: 0.7 }}>
+                  Balance:{" "}
+                  {formatUnits(BigInt(pending.balanceBaseUnits), tokenDecimals(pending.tokenSymbol))}{" "}
+                  {pending.tokenSymbol}
                 </Text>
                 <Text style={{ fontSize: 12, opacity: 0.7 }}>
                   Session key: {shorten(pending.sessionPublicKey)}

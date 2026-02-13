@@ -2,6 +2,7 @@ import { validateAndParseAddress } from "starknet";
 
 import { getSessionPrivateKey, listSessionKeys, type StoredSessionKey } from "../policy/session-keys";
 import { createSessionAccount } from "../starknet/account";
+import { getErc20Balance } from "../starknet/balances";
 import { TOKENS, type StarknetTokenSymbol } from "../starknet/tokens";
 import { u256FromBigInt } from "../starknet/u256";
 import { parseUnits } from "../starknet/units";
@@ -14,6 +15,7 @@ export type TransferAction = {
   to: string;
   amount: string; // human input
   amountBaseUnits: string; // decimal bigint string
+  balanceBaseUnits: string; // decimal bigint string
   calldata: string[]; // [to, amount_low, amount_high]
   sessionPublicKey: string;
   policy: {
@@ -52,6 +54,11 @@ export async function prepareTransferFromText(params: {
   const amountUnits = parseUnits(amount, token.decimals);
   const { low, high } = u256FromBigInt(amountUnits);
 
+  const balance = await getErc20Balance(params.wallet.rpcUrl, tokenAddress, params.wallet.accountAddress);
+  if (balance < amountUnits) {
+    throw new Error(`Insufficient ${tokenSymbol} balance.`);
+  }
+
   const keys = await listSessionKeys();
   const key = pickKeyForToken(keys, tokenSymbol);
 
@@ -70,6 +77,7 @@ export async function prepareTransferFromText(params: {
     to,
     amount,
     amountBaseUnits: amountUnits.toString(),
+    balanceBaseUnits: balance.toString(),
     calldata: [to, low, high],
     sessionPublicKey: key.key,
     policy: {
@@ -150,4 +158,3 @@ export async function executeTransfer(params: {
     revertReason: extractRevertReason(receipt),
   };
 }
-
