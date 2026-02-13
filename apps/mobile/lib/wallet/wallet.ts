@@ -7,6 +7,7 @@ import { secureDelete, secureGet, secureSet } from "../storage/secure-store";
 
 const OWNER_PRIVATE_KEY_ID = "starkclaw.owner_pk.v1";
 const NETWORK_ID = "starkclaw.network_id.v1";
+const DEPLOY_TX_HASH_ID = "starkclaw.deploy_tx_hash.v1";
 
 export type WalletSnapshot = {
   networkId: StarknetNetworkId;
@@ -15,6 +16,18 @@ export type WalletSnapshot = {
   ownerPublicKey: string;
   accountAddress: string;
 };
+
+export async function loadOwnerPrivateKey(): Promise<string | null> {
+  return secureGet(OWNER_PRIVATE_KEY_ID);
+}
+
+export async function loadDeployTxHash(): Promise<string | null> {
+  return secureGet(DEPLOY_TX_HASH_ID);
+}
+
+export async function saveDeployTxHash(txHash: string): Promise<void> {
+  await secureSet(DEPLOY_TX_HASH_ID, txHash);
+}
 
 function normalizePrivateKey(bytes: Uint8Array): string {
   const scalar = ec.starkCurve.utils.normPrivateKeyToScalar(bytes);
@@ -77,4 +90,5 @@ export async function createWallet(
 export async function resetWallet(): Promise<void> {
   await secureDelete(OWNER_PRIVATE_KEY_ID);
   await secureDelete(NETWORK_ID);
+  await secureDelete(DEPLOY_TX_HASH_ID);
 }

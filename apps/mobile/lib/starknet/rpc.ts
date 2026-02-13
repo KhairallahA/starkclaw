@@ -93,3 +93,29 @@ export async function callContract(
   ]);
 }
 
+export async function getClassHashAt(
+  rpcUrl: string,
+  contractAddress: string,
+  blockId: "latest" | "pending" = "latest"
+): Promise<string> {
+  return starknetRpc<string>(rpcUrl, "starknet_getClassHashAt", [
+    { block_tag: blockId },
+    contractAddress,
+  ]);
+}
+
+export async function isContractDeployed(
+  rpcUrl: string,
+  contractAddress: string
+): Promise<boolean> {
+  try {
+    await getClassHashAt(rpcUrl, contractAddress, "latest");
+    return true;
+  } catch (e) {
+    // Avoid masking random network issues by only treating "not found" as false.
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.toLowerCase().includes("contract not found")) return false;
+    if (msg.toLowerCase().includes("requested contract address")) return false;
+    throw e;
+  }
+}

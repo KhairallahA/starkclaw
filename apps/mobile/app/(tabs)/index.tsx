@@ -1,11 +1,23 @@
 import * as React from "react";
 import { ActivityIndicator, Pressable, ScrollView } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 
 import { Text, View } from "@/components/Themed";
 import { formatUnits, getErc20Balance } from "@/lib/starknet/balances";
-import { getChainId } from "@/lib/starknet/rpc";
+import { createOwnerAccount } from "@/lib/starknet/account";
+import { AGENT_ACCOUNT_CLASS_HASH } from "@/lib/starknet/contracts";
+import { getChainId, isContractDeployed } from "@/lib/starknet/rpc";
 import { TOKENS } from "@/lib/starknet/tokens";
-import { createWallet, loadWallet, resetWallet, type WalletSnapshot } from "@/lib/wallet/wallet";
+import { requireOwnerAuth } from "@/lib/security/owner-auth";
+import {
+  createWallet,
+  loadDeployTxHash,
+  loadOwnerPrivateKey,
+  loadWallet,
+  resetWallet,
+  saveDeployTxHash,
+  type WalletSnapshot,
+} from "@/lib/wallet/wallet";
 
 type BalanceRow = {
   symbol: string;
@@ -17,21 +29,28 @@ export default function TabOneScreen() {
   const [busy, setBusy] = React.useState(false);
   const [rpcChainId, setRpcChainId] = React.useState<string | null>(null);
   const [balances, setBalances] = React.useState<BalanceRow[] | null>(null);
+  const [deployed, setDeployed] = React.useState<boolean | null>(null);
+  const [deployTxHash, setDeployTxHash] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
   const refresh = React.useCallback(async (w: WalletSnapshot) => {
     setError(null);
     setBalances(null);
+    setDeployed(null);
 
     const chainId = await getChainId(w.rpcUrl);
     setRpcChainId(chainId);
 
     const rows: BalanceRow[] = [];
     for (const t of TOKENS) {
-      const raw = await getErc20Balance(w.rpcUrl, t.address, w.accountAddress);
+      const tokenAddress = t.addressByNetwork[w.networkId];
+      const raw = await getErc20Balance(w.rpcUrl, tokenAddress, w.accountAddress);
       rows.push({ symbol: t.symbol, display: formatUnits(raw, t.decimals) });
     }
     setBalances(rows);
+
+    const isDeployed = await isContractDeployed(w.rpcUrl, w.accountAddress);
+    setDeployed(isDeployed);
   }, []);
 
   React.useEffect(() => {
@@ -42,6 +61,7 @@ export default function TabOneScreen() {
         const w = await loadWallet();
         if (cancelled) return;
         setWallet(w);
+        if (w) setDeployTxHash(await loadDeployTxHash());
         if (w) await refresh(w);
       } catch (e) {
         if (cancelled) return;
@@ -77,12 +97,57 @@ export default function TabOneScreen() {
       setWallet(null);
       setRpcChainId(null);
       setBalances(null);
+      setDeployed(null);
+      setDeployTxHash(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
       setBusy(false);
     }
   }, []);
+
+  const onOpenFaucet = React.useCallback(async () => {
+    await WebBrowser.openBrowserAsync("https://starknet-faucet.vercel.app/");
+  }, []);
+
+  const onDeploy = React.useCallback(async () => {
+    if (!wallet) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await requireOwnerAuth({ reason: "Deploy Starkclaw account" });
+      const ownerPrivateKey = await loadOwnerPrivateKey();
+      if (!ownerPrivateKey) throw new Error("Missing owner key");
+
+      const account = createOwnerAccount({
+        rpcUrl: wallet.rpcUrl,
+        accountAddress: wallet.accountAddress,
+        ownerPrivateKey,
+      });
+
+      const resp = await account.deployAccount({
+        classHash: AGENT_ACCOUNT_CLASS_HASH,
+        constructorCalldata: [wallet.ownerPublicKey, "0x0"],
+        addressSalt: wallet.ownerPublicKey,
+        contractAddress: wallet.accountAddress,
+      });
+
+      setDeployTxHash(resp.transaction_hash);
+      await saveDeployTxHash(resp.transaction_hash);
+
+      await account.waitForTransaction(resp.transaction_hash, {
+        retries: 60,
+        retryInterval: 3_000,
+      });
+
+      await refresh(wallet);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setBusy(false);
+    }
+  }, [wallet, refresh]);
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic">
@@ -153,6 +218,24 @@ export default function TabOneScreen() {
               )}
             </View>
 
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 13, opacity: 0.7 }}>Deployment</Text>
+              <Text style={{ fontSize: 16, fontWeight: "600" }}>
+                {deployed === null ? "Checking..." : deployed ? "Deployed" : "Not deployed"}
+              </Text>
+              {!deployed ? (
+                <Text style={{ opacity: 0.7 }}>
+                  Fund this address with Sepolia ETH, then deploy. (Account class hash:{" "}
+                  {AGENT_ACCOUNT_CLASS_HASH.slice(0, 10)}…)
+                </Text>
+              ) : null}
+              {deployTxHash ? (
+                <Text selectable style={{ fontSize: 12, opacity: 0.7 }}>
+                  Last deploy tx: {deployTxHash}
+                </Text>
+              ) : null}
+            </View>
+
             <View style={{ flexDirection: "row", gap: 12 }}>
               <Pressable
                 disabled={busy}
@@ -172,6 +255,60 @@ export default function TabOneScreen() {
 
               <Pressable
                 disabled={busy}
+                onPress={onOpenFaucet}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 14,
+                  borderWidth: 1,
+                  borderColor: "rgba(0,0,0,0.12)",
+                  backgroundColor: "rgba(0,0,0,0.04)",
+                }}
+              >
+                <Text style={{ textAlign: "center", fontWeight: "600" }}>Faucet</Text>
+              </Pressable>
+            </View>
+
+            {!deployed ? (
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <Pressable
+                  disabled={busy}
+                  onPress={onDeploy}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: 14,
+                    backgroundColor: "#111",
+                  }}
+                >
+                  <Text style={{ textAlign: "center", fontWeight: "700", color: "white" }}>
+                    Deploy Account
+                  </Text>
+                </Pressable>
+
+                <Pressable
+                  disabled={busy}
+                  onPress={onReset}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    borderRadius: 14,
+                    borderWidth: 1,
+                    borderColor: "rgba(255,59,48,0.35)",
+                    backgroundColor: "rgba(255,59,48,0.08)",
+                  }}
+                >
+                  <Text style={{ textAlign: "center", fontWeight: "600", color: "#ff3b30" }}>
+                    Reset
+                  </Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                disabled={busy}
                 onPress={onReset}
                 style={{
                   flex: 1,
@@ -187,7 +324,7 @@ export default function TabOneScreen() {
                   Reset
                 </Text>
               </Pressable>
-            </View>
+            )}
           </View>
         ) : (
           <Pressable

@@ -1,12 +1,7 @@
 import { hash } from "starknet";
 
 import { callContract } from "./rpc";
-
-function u256ToBigInt(lowHex: string, highHex: string): bigint {
-  const low = BigInt(lowHex);
-  const high = BigInt(highHex);
-  return low + (high << 128n);
-}
+import { bigIntFromU256 } from "./u256";
 
 export async function getErc20Balance(
   rpcUrl: string,
@@ -25,7 +20,7 @@ export async function getErc20Balance(
     throw new Error("Unexpected balanceOf result shape");
   }
 
-  return u256ToBigInt(result[0], result[1]);
+  return bigIntFromU256(result[0], result[1]);
 }
 
 export function formatUnits(value: bigint, decimals: number): string {
@@ -40,4 +35,3 @@ export function formatUnits(value: bigint, decimals: number): string {
   const fractionStr = fraction.toString().padStart(decimals, "0").replace(/0+$/, "");
   return `${whole.toString()}.${fractionStr}`;
 }
-
