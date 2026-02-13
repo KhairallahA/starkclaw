@@ -1,0 +1,20 @@
+name: Security Report
+description: Report a security vulnerability (redirects to SECURITY.md)
+labels: ["security"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not open public issues for security vulnerabilities.**
+
+        Please report security issues privately using one of the methods described in [SECURITY.md](https://github.com/keep-starknet-strange/starkclaw/blob/main/SECURITY.md):
+
+        - **Preferred:** [GitHub Security Advisories](https://github.com/keep-starknet-strange/starkclaw/security/advisories/new)
+        - **Alternative:** Email security@starkware.co (mention "Starkclaw" in subject)
+
+        If you're unsure whether something is a security issue, err on the side of caution and report privately.
+  - type: textarea
+    id: confirm
+    attributes:
+      label: Confirmation
+      description: "If this is NOT a security vulnerability and you still want to file it here, describe why below. Otherwise, please close this and use the private reporting channels above."
