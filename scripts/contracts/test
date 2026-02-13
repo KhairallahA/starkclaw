@@ -20,15 +20,20 @@ fi
 
 cd "$ROOT_DIR/contracts"
 
-if [[ ! -d "sanity" ]]; then
-  echo "No contract packages found; skipping."
+SCARB_TOMLS="$(find . -mindepth 2 -maxdepth 2 -name Scarb.toml -print | sort)"
+
+if [[ -z "$SCARB_TOMLS" ]]; then
+  echo "No Scarb packages found; skipping."
   exit 0
 fi
 
 echo "Running Cairo checks..."
-(
-  cd sanity
-  scarb build
-  snforge test
-)
-
+while IFS= read -r toml; do
+  pkg_dir="$(dirname "$toml")"
+  echo "==> $pkg_dir"
+  (
+    cd "$pkg_dir"
+    scarb build
+    snforge test
+  )
+done <<<"$SCARB_TOMLS"
