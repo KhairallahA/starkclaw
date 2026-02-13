@@ -1,12 +1,14 @@
 # Starkclaw Mobile App
 
-This is the Expo (React Native) app that demonstrates Starkclaw end-to-end:
+This is the Expo (React Native) app that showcases Starkclaw’s end-to-end UX.
 
-- Deterministic Starknet account address (fund first, deploy later)
-- Deploy the AA account contract on Sepolia
-- Create and register session keys with on-chain spend caps
-- Execute ERC-20 transfers via a session key (with an explicit “Execute” step)
-- Show **on-chain denial** when a transfer exceeds the policy cap
+Right now it is **UI-only** and **fully mocked** (no RPC calls, no wallets, no contract interaction). The goal is to demo:
+
+- Premium onboarding (agent setup + “account creation”)
+- Trading preview + confirmations + policy checks (mocked)
+- Policy editor (caps, allowlists, contract trust, emergency lockdown)
+- Alerts + inbox + activity timeline
+- Agent proposals (approve/reject) with clear context
 
 The product story lives in the repo root `README.md`. This file is for people hacking on the app.
 
@@ -14,9 +16,10 @@ The product story lives in the repo root `README.md`. This file is for people ha
 
 - Expo SDK 54 + Expo Router
 - TypeScript
-- Key storage: `expo-secure-store`
-- Owner confirmations: `expo-local-authentication` (best-effort; falls back if unavailable)
-- Starknet: `starknet` (starknet.js) + direct JSON-RPC calls
+- UI: `expo-blur`, `expo-linear-gradient`, `expo-image`, `expo-haptics`
+- Fonts: `@expo-google-fonts/instrument-sans`, `@expo-google-fonts/instrument-serif`
+- Demo persistence: `expo-secure-store`
+- Router typed routes: generated via `scripts/generate-typed-routes.cjs` (runs before `npm run typecheck`)
 
 ## Run
 
@@ -50,45 +53,36 @@ npm run typecheck
 
 ## App Tour (Where To Look)
 
-- Home screen: `app/(tabs)/index.tsx`
-  - wallet create/reset
-  - balances
-  - deploy account
-- Policies screen: `app/(tabs)/policies.tsx`
-  - create/register/revoke/emergency revoke session keys
-- Agent screen: `app/(tabs)/agent.tsx`
-  - deterministic parsing + preview + execute
-- Activity screen: `app/(tabs)/activity.tsx`
-  - local activity log + StarkScan links
+Onboarding:
 
-Core logic:
+- `app/(onboarding)/welcome.tsx`
+- `app/(onboarding)/profile.tsx`
+- `app/(onboarding)/limits.tsx`
+- `app/(onboarding)/alerts.tsx`
+- `app/(onboarding)/ready.tsx`
 
-- Wallet derivation + persistence: `lib/wallet/wallet.ts`
-- RPC client: `lib/starknet/rpc.ts`
-- Default networks: `lib/starknet/networks.ts`
-- Token list: `lib/starknet/tokens.ts`
-- Session key storage + on-chain policy calls: `lib/policy/session-keys.ts`
-- Session-key signing (prepends pubkey): `lib/starknet/session-signer.ts`
-- Transfer preparation + execution: `lib/agent/transfer.ts`
-- Local activity log: `lib/activity/activity.ts`
+Tabs:
 
-## Sepolia Prerequisite (Important)
+- Home: `app/(tabs)/index.tsx`
+- Trade: `app/(tabs)/trade.tsx`
+- Agent: `app/(tabs)/agent.tsx`
+- Policies: `app/(tabs)/policies.tsx`
+- Inbox: `app/(tabs)/inbox.tsx`
 
-The app deploys the `AgentAccount` class by class hash. That class must be **declared on Sepolia** at least once
-by a funded deployer account before *any* user can deploy an instance.
+Demo state (mocked):
 
-From repo root:
+- Store + actions: `lib/demo/demo-store.tsx`
+- Fixtures + types: `lib/demo/demo-state.ts`
 
-```bash
-STARKNET_DEPLOYER_ADDRESS=0x... \
-STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
-./scripts/contracts/declare-agent-account
-```
+UI system:
 
-## Security Notes (MVP Reality)
+- Theme tokens: `ui/app-theme.ts`
+- Background: `ui/app-background.tsx`
+- Glass surfaces: `ui/glass-card.tsx`
+- Buttons: `ui/buttons.tsx`
+- Typography: `ui/typography.tsx`
 
-- Experimental software. Not audited.
-- Do not use mainnet funds.
-- The security claim here is **bounded authority** via on-chain policy, not “the agent is safe”.
-- Private keys should never be put in logs, prompts, screenshots, or issues.
+## Security Notes
 
+- This app currently runs in **demo mode** (mocked state).
+- Do not put private keys or real secrets in issues/screenshots/logs.
