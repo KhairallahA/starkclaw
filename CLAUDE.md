@@ -3,7 +3,7 @@ Starkclaw: a premium mobile personal agent that can execute Starknet transaction
 </identity>
 
 <status>
-Repo is bootstrapped (Expo app + Cairo contracts sanity package + deterministic scripts + CI). Next milestone: M01 import Starknet AA Agent Account contract + tests. Source of truth: `STATUS.md`.
+MVP demo flow is implemented end-to-end in the mobile app (wallet create/fund/deploy, session key policies, constrained ERC20 transfers, activity log). Source of truth: `STATUS.md`.
 </status>
 
 <environment>
@@ -66,15 +66,8 @@ Assume the user does not see raw command output; summarize important results.
 | Check all | `./scripts/check` | runs mobile lint/typecheck + contracts tests |
 | App dev | `./scripts/app/dev` | `expo start` |
 | Contracts test | `./scripts/contracts/test` | scarb + snforge |
+| Declare AgentAccount (one-time, Sepolia) | `STARKNET_DEPLOYER_ADDRESS=... STARKNET_DEPLOYER_PRIVATE_KEY=... ./scripts/contracts/declare-agent-account` | required before any in-app account deploy |
 </current>
-<planned_m00>
-| Task | Command | Notes |
-| ---- | ------- | ----- |
-| Check all | `./scripts/check` | lint + typecheck + unit + contracts |
-| App dev | `./scripts/app/dev` | starts Expo |
-| Contracts test | `./scripts/contracts/test` | scarb + snforge |
-| Contracts deploy | `./scripts/contracts/deploy sepolia` | requires env + funded deployer |
-</planned_m00>
 </commands>
 
 <workflows>
