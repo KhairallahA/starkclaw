@@ -7,6 +7,7 @@ Mobile personal agent with safe financial rails on Starknet (AA session keys + o
 - Dev (mobile): `./scripts/app/dev`
 - Check (CI/local): `./scripts/check`
 - Contracts tests: `./scripts/contracts/test`
+- Declare AgentAccount (Sepolia, one-time): `STARKNET_DEPLOYER_ADDRESS=... STARKNET_DEPLOYER_PRIVATE_KEY=... ./scripts/contracts/declare-agent-account`
 
 ## Prereqs
 
@@ -22,4 +23,3 @@ Mobile personal agent with safe financial rails on Starknet (AA session keys + o
 - Project spec: `spec.md`
 - Milestones: `IMPLEMENTATION_PLAN.md`
 - Current status: `STATUS.md`
-
