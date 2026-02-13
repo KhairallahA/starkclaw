@@ -35,6 +35,12 @@ M06: End-To-End MVP Demo (Constrained Transfer)
 
 Manual MVP smoke (Sepolia):
 
+0. One-time setup: declare the `AgentAccount` class on Sepolia (required before any user can deploy):
+   - Export env vars:
+     - `STARKNET_RPC_URL` (optional, defaults to publicnode Sepolia)
+     - `STARKNET_DEPLOYER_ADDRESS`
+     - `STARKNET_DEPLOYER_PRIVATE_KEY`
+   - Run: `./scripts/contracts/declare-agent-account`
 1. Open the app.
 2. Tap `Create Wallet`.
 3. Tap `Faucet` and fund the displayed account address with Sepolia ETH.

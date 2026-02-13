@@ -7,20 +7,19 @@ export type StarknetNetworkConfig = {
   chainIdHex: string;
 };
 
-// Public RPC endpoints (no API key) via Lava.
+// Public RPC endpoints (no API key) via publicnode.
 export const STARKNET_NETWORKS: Record<StarknetNetworkId, StarknetNetworkConfig> =
   {
     sepolia: {
       id: "sepolia",
       name: "Sepolia",
-      rpcUrl: "https://rpc.starknet-testnet.lava.build/rpc/v0_9",
+      rpcUrl: "https://starknet-sepolia-rpc.publicnode.com",
       chainIdHex: "0x534e5f5345504f4c4941", // SN_SEPOLIA
     },
     mainnet: {
       id: "mainnet",
       name: "Mainnet",
-      rpcUrl: "https://rpc.starknet.lava.build/rpc/v0_9",
+      rpcUrl: "https://starknet-rpc.publicnode.com",
       chainIdHex: "0x534e5f4d41494e", // SN_MAIN
     },
   };
-

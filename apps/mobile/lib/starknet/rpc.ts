@@ -87,10 +87,7 @@ export async function callContract(
   req: StarknetCallRequest,
   blockId: "latest" | "pending" = "latest"
 ): Promise<string[]> {
-  return starknetRpc<string[]>(rpcUrl, "starknet_call", [
-    req,
-    { block_tag: blockId },
-  ]);
+  return starknetRpc<string[]>(rpcUrl, "starknet_call", [req, blockId]);
 }
 
 export async function getClassHashAt(
@@ -98,10 +95,7 @@ export async function getClassHashAt(
   contractAddress: string,
   blockId: "latest" | "pending" = "latest"
 ): Promise<string> {
-  return starknetRpc<string>(rpcUrl, "starknet_getClassHashAt", [
-    { block_tag: blockId },
-    contractAddress,
-  ]);
+  return starknetRpc<string>(rpcUrl, "starknet_getClassHashAt", [blockId, contractAddress]);
 }
 
 export async function isContractDeployed(
@@ -109,13 +103,14 @@ export async function isContractDeployed(
   contractAddress: string
 ): Promise<boolean> {
   try {
-    await getClassHashAt(rpcUrl, contractAddress, "latest");
-    return true;
+    const classHash = await getClassHashAt(rpcUrl, contractAddress, "latest");
+    return BigInt(classHash) !== 0n;
   } catch (e) {
     // Avoid masking random network issues by only treating "not found" as false.
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.toLowerCase().includes("contract not found")) return false;
     if (msg.toLowerCase().includes("requested contract address")) return false;
+    if (msg.toLowerCase().includes("invalid contract address")) return false;
     throw e;
   }
 }
