@@ -1,65 +1,58 @@
-# Agent Account Contract
+# AgentAccount (Starknet AA)
 
-Purpose-built Starknet account contract for AI agents with session keys, spending limits, and autonomous operation.
+This package contains the Starkclaw account contract that enforces session-key policies on-chain.
 
-## Features
+It is designed around a simple constraint:
 
-- **Session Keys** - Delegate permissions with configurable policies
-- **Spending Limits** - Daily limits per token
-- **Time Bounds** - Keys valid only in specific time ranges
-- **Emergency Revoke** - Kill switch revokes all session keys
-- **Agent Identity** - Link to on-chain ERC-8004 identity
+**The agent should never hold the owner key.**
 
-## Quick Start
+Instead, the user registers one or more session keys with explicit limits, and the contract enforces those limits
+in `__execute__` during transaction execution.
+
+## Policy Model (MVP)
+
+See `src/interfaces.cairo`:
+
+- `valid_after`, `valid_until`
+- `spending_token`, `spending_limit` (24h rolling window)
+- `allowed_contract` (v1: single allowed target; `0` means “any”)
+
+Spending is debited for value-moving ERC-20 selectors:
+
+- `transfer`
+- `approve`
+- `increase_allowance`
+- `increaseAllowance`
+
+This blocks “approval bypass” patterns where a session key sets an unlimited allowance and a colluder drains funds.
+
+Signature convention (see `src/agent_account.cairo`):
+
+- Owner tx signature: `[r, s]`
+- Session tx signature: `[session_key_pubkey, r, s]`
+
+## Build + Test
 
 ```bash
 scarb build
-scarb test
+snforge test
 ```
 
-## Usage
+From repo root you can also run `./scripts/contracts/test`.
 
-### Deploy Agent Account
+## Sepolia Declaration
+
+The mobile app deploys by class hash. You must declare the class on Sepolia at least once before deploying instances.
+
+From repo root:
 
 ```bash
-starkli account oz init --keystore keystore.json
-starkli declare target/dev/agent_account_AgentAccount.contract_class.json
-starkli deploy <class_hash> <public_key>
+STARKNET_DEPLOYER_ADDRESS=0x... \
+STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
+./scripts/contracts/declare-agent-account
 ```
 
-### Register Session Key
+## Safety Notes
 
-```cairo
-let policy = SessionPolicy {
-    valid_after: now,
-    valid_until: now + 86400, // 24 hours
-    spending_limit: 1000000000000000000, // 1 ETH
-    spending_token: eth_address,
-    allowed_contract: swap_router, // zero address = any contract
-};
-
-account.register_session_key(session_key, policy);
-```
-
-## Security
-
-- Owner-only session key management
-- Automatic spending limit resets (24h periods)
-- Time-based key expiration
-- Emergency revoke for all keys
-
-## Integration
-
-Links to Agent Registry (#5) for on-chain identity:
-
-```cairo
-account.set_agent_id(registry_address, agent_id);
-```
-
-Works with MCP Server (#4) for autonomous operations.
-
-## Related
-
-- Issue: #10
-- MCP Server: #4
-- A2A Adapter: #5
+- Experimental. Not audited.
+- Treat changes to `__validate__` / `__execute__` as security-critical.

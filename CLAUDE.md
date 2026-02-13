@@ -25,8 +25,8 @@ Assume the user does not see raw command output; summarize important results.
 
 <structure>
 <current>
-- `apps/mobile/`: Expo app (Expo Router tabs template; will be replaced by Starkclaw UI)
-- `contracts/sanity/`: Cairo sanity package (smoke tests for toolchain wiring)
+- `apps/mobile/`: Expo app (Starkclaw MVP: wallet, policies, agent, activity)
+- `contracts/agent-account/`: Cairo account contract + tests (session keys + policy enforcement)
 - `scripts/`: canonical commands used by CI
 - `.github/workflows/ci.yml`: CI entrypoint (runs `./scripts/check`)
 - `spec.md`: expanded MVP spec

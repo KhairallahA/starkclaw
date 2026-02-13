@@ -134,7 +134,6 @@ The authoritative runbook is in `STATUS.md`.
 
 - `apps/mobile/`: Expo app (Expo Router)
 - `contracts/agent-account/`: Cairo account contract + tests (the “safety rails”)
-- `contracts/sanity/`: Cairo toolchain smoke tests
 - `scripts/`: deterministic commands (CI calls these)
 - `spec.md`: product spec
 - `IMPLEMENTATION_PLAN.md`: milestone plan

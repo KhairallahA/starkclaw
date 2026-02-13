@@ -11,7 +11,7 @@ M09 (Subset): Audit Export + Hardening
 - Expanded spec written in `spec.md`.
 - Implementation plan and milestones written in `IMPLEMENTATION_PLAN.md`.
 - Original draft preserved in `spec.draft.md`.
-- M00 bootstrap: Expo app scaffold + Cairo sanity package + deterministic scripts + CI.
+- M00 bootstrap: Expo app scaffold + Cairo contracts workspace + deterministic scripts + CI.
 - M01 baseline safety rails: vendored `contracts/agent-account` and wired into `scripts/contracts/test`.
 - M02 wallet core: deterministic account address + RPC reads (balances, chain id).
 - M03 deploy from mobile: funding UX + deploy account transaction flow.
