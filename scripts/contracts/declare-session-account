@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# Uses starknet.js from apps/mobile to avoid duplicating dependencies at repo root.
+# Canonical path: session-account lineage from starknet-agentic.
+#
+# Optional override:
+# UPSTREAM_SESSION_ACCOUNT_PATH=/abs/path/to/contracts/session-account
+node "$ROOT_DIR/apps/mobile/scripts/declare-session-account.mjs"

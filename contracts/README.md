@@ -6,7 +6,8 @@ If the app UI and the agent logic are compromised, the contracts are still the f
 
 ## Packages
 
-- `agent-account/`: Starknet AA account contract with session keys + policy enforcement
+- `agent-account/`: legacy local contract package retained during migration
+  - canonical production lineage is `session-account` from `starknet-agentic`
 
 ## What The Account Enforces (MVP)
 
@@ -42,17 +43,30 @@ snforge test
 
 ## Deploy / Declare (Sepolia)
 
-The mobile app deploys the account using a pinned class hash. For Sepolia, that class must be declared first.
-
-From repo root:
+Canonical production declare path (session-account lineage):
 
 ```bash
 STARKNET_DEPLOYER_ADDRESS=0x... \
 STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
+./scripts/contracts/declare-session-account
+```
+
+Optional override for upstream source location:
+
+```bash
+UPSTREAM_SESSION_ACCOUNT_PATH=/abs/path/to/contracts/session-account \
+STARKNET_DEPLOYER_ADDRESS=0x... \
+STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
+./scripts/contracts/declare-session-account
+```
+
+Legacy fallback (migration/debug only):
+
+```bash
 ./scripts/contracts/declare-agent-account
 ```
 
-If you change the Cairo code:
+If you change canonical session-account code:
 
 1. Rebuild and re-declare the class on Sepolia.
 2. Update the pinned hash in `apps/mobile/lib/starknet/contracts.ts`.
@@ -62,4 +76,3 @@ If you change the Cairo code:
 - Experimental contracts. Not audited.
 - Don’t deploy to mainnet with real funds.
 - Review any change to `__validate__` / `__execute__` like it’s a wallet implementation, because it is.
-
