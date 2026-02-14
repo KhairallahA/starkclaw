@@ -204,7 +204,7 @@ Starkclaw is part of a multi-repo system. The key integrations are:
      - optional override path: `UPSTREAM_SESSION_ACCOUNT_PATH`
    - Why it matters: Starkclaw keeps wallet policy enforcement aligned with upstream session-account semantics.
 
-2. `keep-starknet-strange/starknet-keyring-proxy` (SISNA)
+2. [`omarespejel/SISNA`](https://github.com/omarespejel/SISNA) (SISNA)
    - Relationship: remote signer boundary for session-key signing.
    - How Starkclaw uses it:
      - signer client and runtime config in `apps/mobile/lib/signer/**`
