@@ -142,6 +142,8 @@ Notes:
 - `STARKNET_RPC_URL` is optional (defaults to publicnode Sepolia)
 - You need a funded deployer account for fees
 - `UPSTREAM_SESSION_ACCOUNT_PATH` is optional to override source location
+- `EXPECTED_SESSION_ACCOUNT_CLASS_HASH` is optional but pinned by default; declare fails on mismatch
+- Existing wallets without persisted class-hash metadata remain on legacy hash addressing (no silent remap)
 
 Legacy fallback (migration/debug only):
 

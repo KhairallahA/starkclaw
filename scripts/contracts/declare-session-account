@@ -8,4 +8,5 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 #
 # Optional override:
 # UPSTREAM_SESSION_ACCOUNT_PATH=/abs/path/to/contracts/session-account
+# EXPECTED_SESSION_ACCOUNT_CLASS_HASH=0x... (must match computed hash)
 node "$ROOT_DIR/apps/mobile/scripts/declare-session-account.mjs"

@@ -60,6 +60,13 @@ STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
 ./scripts/contracts/declare-session-account
 ```
 
+Optional override for expected class hash pinning:
+
+```bash
+EXPECTED_SESSION_ACCOUNT_CLASS_HASH=0x... \
+./scripts/contracts/declare-session-account
+```
+
 Legacy fallback (migration/debug only):
 
 ```bash

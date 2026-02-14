@@ -7,10 +7,22 @@ import { fileURLToPath } from "node:url";
 
 import { Account, RpcProvider, extractContractHashes } from "starknet";
 
+const CLASS_HASH_REGEX = /^0x[0-9a-fA-F]{1,64}$/;
+const DEFAULT_EXPECTED_SESSION_ACCOUNT_CLASS_HASH =
+  "0x4c1adc7ae850ce40188692488816042114f055c32b61270f775c98163a69f77";
+
 function requiredEnv(name) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing required env: ${name}`);
   return v;
+}
+
+function normalizeClassHash(name, value) {
+  const trimmed = value.trim();
+  if (!CLASS_HASH_REGEX.test(trimmed)) {
+    throw new Error(`${name} must be a 0x-prefixed hex felt (1-64 hex chars)`);
+  }
+  return `0x${trimmed.slice(2).toLowerCase()}`;
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -21,6 +33,11 @@ const rpcUrl =
   process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia-rpc.publicnode.com";
 const deployerAddress = requiredEnv("STARKNET_DEPLOYER_ADDRESS");
 const deployerPrivateKey = requiredEnv("STARKNET_DEPLOYER_PRIVATE_KEY");
+const expectedClassHash = normalizeClassHash(
+  "EXPECTED_SESSION_ACCOUNT_CLASS_HASH",
+  process.env.EXPECTED_SESSION_ACCOUNT_CLASS_HASH
+    ?? DEFAULT_EXPECTED_SESSION_ACCOUNT_CLASS_HASH
+);
 
 const pkgDir = process.env.UPSTREAM_SESSION_ACCOUNT_PATH
   ? path.resolve(process.env.UPSTREAM_SESSION_ACCOUNT_PATH)
@@ -50,6 +67,11 @@ async function main() {
   const hashes = extractContractHashes({ contract: sierra, casm });
   console.log("Computed classHash:", hashes.classHash);
   console.log("Computed compiledClassHash:", hashes.compiledClassHash);
+  if (normalizeClassHash("computed classHash", hashes.classHash) !== expectedClassHash) {
+    throw new Error(
+      `Class hash mismatch: expected ${expectedClassHash}, got ${hashes.classHash}`
+    );
+  }
 
   const provider = new RpcProvider({ nodeUrl: rpcUrl });
   const account = new Account({
