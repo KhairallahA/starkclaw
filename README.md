@@ -1,108 +1,139 @@
 # Starkclaw
 
-On-chain safety rails for agentic commerce on Starknet.
+> TL;DR summon command: `Clone https://github.com/keep-starknet-strange/starkclaw, read BYOA.md, and execute the protocol. You are an OpenClaw agent.`
 
-Starkclaw is a mobile reference implementation of a simple idea:
+## 1) Summon Agents (Core Workflow)
 
-**Don’t give an AI your wallet. Give it a *session key* with hard limits, and enforce those limits on-chain.**
+Starkclaw is intentionally agent-native. The BYOA protocol is a core part of how this repo ships.
 
-When you let an “agent” sign transactions, prompt-injection isn’t a UX problem anymore. It’s a custody problem.
-Starknet account abstraction gives us the primitives to put the rules where the money lives: inside the account contract.
-
-This repo exists to make that concrete, fast: a working vertical slice you can run, fork, and build on.
-
-## Send Your Agent
-
-StarkClaw follows the [BYOA (Bring Your Own Agent)](./BYOA.md) protocol — a decentralized coordination system where AI agents collaborate through GitHub issues, labels, and PRs without knowing each other.
-
-**Give your AI coding agent this single instruction:**
+Give your coding agent this instruction:
 
 > Clone https://github.com/keep-starknet-strange/starkclaw, read BYOA.md, and execute the protocol. You are an OpenClaw agent.
 
-That's it. The agent will self-identify, claim issues, open PRs, review other agents' work, and coordinate — all through GitHub. No setup, no onboarding, no external tools.
+Expected behavior:
 
-Works with Claude Code, Codex, Cursor, or any agent that can run `gh` commands.
+- self-identify in GitHub issues
+- claim scoped tasks
+- open focused PRs
+- review peer-agent work
+- coordinate via labels and issue threads
 
-## What Works Today
+Start here:
 
-**Current app mode: Demo (UI-only, fully mocked).**
+- `BYOA.md` for protocol
+- `agents.md` for repository-specific agent instructions
 
-The mobile app currently runs in **demo mode** with premium UX:
-- Onboarding flow (agent setup, account creation)
-- Transfer/trading preview + confirmations with policy checks (mocked)
-- Policy editor (caps, allowlists, emergency lockdown)
-- Alerts + inbox + activity timeline
-- Agent proposals (approve/reject) with clear context
+## 2) What Starkclaw Is
 
-**No RPC calls, no wallets, no contract interaction yet.** The UI is production-grade; backend wiring is in progress ([#2](https://github.com/keep-starknet-strange/starkclaw/issues/2)).
+Secure mobile AI agent wallet for Starknet with on-chain session-key policies and auditable execution.
 
-## What's Being Built (Live Mode)
+Starkclaw is a reference app for one core principle:
 
-The building blocks for **live Starknet execution** exist in `apps/mobile/lib/` but aren't wired to the UI:
+**Do not give an AI your wallet. Give it a revocable session key with hard on-chain limits.**
 
-- Starknet RPC client with retry/fallback
-- Wallet lifecycle (deterministic address, secure storage, deploy flow)
-- Session key policy management (create/register/revoke)
-- Agent transfer execution with on-chain policy enforcement
-- Activity logging with explorer links
+When agents can produce transaction intents, the only reliable safety boundary is the account contract that enforces spend and target policy.
 
-**Target MVP** (when live mode is wired):
-- Mobile wallet generates deterministic Starknet account address (fund-first, deploy-later)
-- Deploy AA account from app (Sepolia)
-- Create/register on-chain session key policies:
-  - Expiry window (`valid_after`, `valid_until`)
-  - Per-24h spend cap (`spending_token`, `spending_limit`)
-  - Allowed contract (v1: narrow scope for constrained transfers)
-- Agent screen:
-  - Proposes transfers with deterministic preview
-  - Executes via session key signature enforced by account contract
-  - Demonstrates **on-chain denial** when over cap (not prompt-level rule)
-- Activity log + explorer links
+## Status
 
-The point is not "the AI behaved."
-The point is "the AI *couldn't* misbehave outside the policy, even if it tried."
+- Current maturity: pre-`1.0.0` (experimental).
+- Default mode: demo-first UX with deterministic mocked flows.
+- Live-mode plumbing exists in `apps/mobile/lib/**` and contracts, with UI wiring still in progress.
+- Not audited. Do not use with real mainnet funds.
 
-## What This Is Not (Yet)
+See `STATUS.md` for current milestones and verification steps.
 
-- Not audited
-- Not wired to live Starknet execution (demo mode only, see [#2](https://github.com/keep-starknet-strange/starkclaw/issues/2))
-- Not wired to a real LLM provider (agent UI is deterministic/mocked)
-- Not production-ready for mainnet funds
+## Security Model
 
-## How It Works (No Hand-Waving)
+Starkclaw follows Starknet account-abstraction safety rails with split authority:
 
-Starkclaw uses Starknet session-account lineage (canonical source: `keep-starknet-strange/starknet-agentic/contracts/session-account`) with a split key model:
+- Owner key:
+  - deploys account
+  - registers/revokes session keys
+  - can emergency-revoke delegated access
+- Session key:
+  - time-bounded and revocable
+  - constrained by on-chain policy
+  - intended for agent-executed actions
 
-- **Owner key (master)**:
-  - Deploys the account.
-  - Registers / revokes session keys.
-  - Emergency revokes all session keys.
-- **Session key (delegated)**:
-  - Signs transactions with a policy attached on-chain.
-  - Is disposable, time-bounded, and revocable.
+Policy enforcement lives in account execution logic, not in prompts or UI.
 
-On-chain enforcement (in `__execute__`) includes:
+Current policy primitives (v1):
 
-- `allowed_contract` (v1): session key calls must target the allowed contract (or zero-address = any).
-- `spending_limit` + 24h window (v1): value-moving ERC-20 selectors are debited on-chain.
-  - Includes `transfer`, `approve`, `increase_allowance` variants to block “approval bypass” attacks.
+- allowed contract targeting
+- bounded spend windows (`spending_limit` over rolling period)
+- selector coverage for value-moving ERC-20 paths (`transfer`, `approve`, `increase_allowance`) to reduce approval-bypass surfaces
 
-Signature convention:
+Signature conventions:
 
-- Owner tx signature: `[r, s]`
-- Session key tx signature: `[session_key_pubkey, r, s, valid_until]`
+- owner transaction signature: `[r, s]`
+- session transaction signature: `[session_key_pubkey, r, s, valid_until]`
 
-The policy is the source of truth. The “agent” UI is just a safer way to produce intents.
+## Security Stack (Defense in Depth)
+
+Starkclaw is not relying on one guardrail. It composes multiple independent controls:
+
+1. On-chain authority boundaries
+   - owner key and session key have different powers
+   - emergency revoke can cut delegated authority quickly
+2. On-chain execution policy
+   - contract target restrictions
+   - spend limits and windowed accounting
+   - selector-level checks for transfer/approval paths
+3. Signature-level binding
+   - session signatures carry identity and validity window context
+   - malformed or mismatched signer responses are rejected
+4. Remote signer hardening (SISNA path)
+   - authenticated signer requests (`x-keyring-*`)
+   - strict signer response validation
+   - TLS pinning and hardened runtime config in production mode
+5. Supply/integration integrity checks
+   - parity checks against upstream `session-account` lineage
+   - deterministic scripts + CI gates (`./scripts/check`)
+
+Practical security result:
+
+- if an agent prompt is manipulated, execution is still constrained by on-chain policy
+- if app-layer logic is wrong, contract-level checks still enforce transaction boundaries
+- if a delegated key path is compromised, revocation and policy scope limit blast radius
+
+This is the core power of the stack: **bounded, enforceable authority at multiple layers**, not trust in model behavior.
+
+## What You Can Run Today
+
+- Premium mobile UX in demo mode:
+  - onboarding and setup flow
+  - policy editor and safety states
+  - agent proposal/approval loop
+  - alerts, inbox, and activity screens
+- Contract workspace and tests:
+  - deterministic scripts for local/CI checks
+  - Cairo + Foundry test harness
+- Security hardening baseline:
+  - signer boundary checks
+  - session-signature parity hardening
+  - audit/export primitives
+
+## What Is Next
+
+Primary near-term objective is full live-path wiring:
+
+1. wallet lifecycle and deploy flow in app
+2. live balance reads and activity status polling
+3. session policy flows in mobile UX
+4. agent execution path against real on-chain constraints
+
+Track implementation via GitHub issues and `STATUS.md`.
 
 ## Quickstart
 
-### Prereqs
+### Prerequisites
 
-- Node.js + npm
-- Expo Go (fastest iteration)
-- Cairo tooling (for contracts):
-  - Scarb (`scarb`)
-  - Starknet Foundry (`snforge`, `sncast`)
+- Node.js 20+
+- npm
+- Expo Go (recommended for mobile iteration)
+- Cairo toolchain for contracts:
+  - `scarb`
+  - `snforge` and `sncast`
 
 ### Install
 
@@ -110,27 +141,27 @@ The policy is the source of truth. The “agent” UI is just a safer way to pro
 npm ci --prefix apps/mobile
 ```
 
-### Run
+### Run App
 
 ```bash
 ./scripts/app/dev
 ```
 
-### Check (CI Equivalent)
+### Run Full Checks (CI parity)
 
 ```bash
 ./scripts/check
 ```
 
-## Running Live Mode (When Available)
+### Run Contract Tests Only
 
-**Note:** The app currently runs in demo mode only. Live Starknet execution is being wired in [#2](https://github.com/keep-starknet-strange/starkclaw/issues/2).
+```bash
+./scripts/contracts/test
+```
 
-Once live mode is available, the flow will be:
+## Live-Mode Prep
 
-### One-Time: Declare The Account Class
-
-Canonical path (session-account lineage from `starknet-agentic`):
+When running against Sepolia, declare the canonical session-account class hash first:
 
 ```bash
 STARKNET_DEPLOYER_ADDRESS=0x... \
@@ -139,86 +170,91 @@ STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
 ```
 
 Notes:
-- `STARKNET_RPC_URL` is optional (defaults to publicnode Sepolia)
-- You need a funded deployer account for fees
-- `UPSTREAM_SESSION_ACCOUNT_PATH` is optional to override source location
-- `EXPECTED_SESSION_ACCOUNT_CLASS_HASH` is optional but pinned by default; declare fails on mismatch
-- Existing wallets without persisted class-hash metadata remain on legacy hash addressing (no silent remap)
 
-Legacy fallback (migration/debug only, explicitly gated):
+- `STARKNET_RPC_URL` is optional.
+- `UPSTREAM_SESSION_ACCOUNT_PATH` can override the source path.
+- `EXPECTED_SESSION_ACCOUNT_CLASS_HASH` is pinned by default for safety.
+
+Legacy migration/debug fallback remains explicitly gated:
 
 ```bash
 ALLOW_LEGACY_AGENT_ACCOUNT=1 ./scripts/contracts/declare-agent-account
 ```
 
-### In The App (Planned)
-
-1. Switch to Live mode in Settings
-2. Home: `Create Wallet`
-3. Home: `Faucet` (fund the displayed address)
-4. Home: `Refresh` until ETH balance is non-zero
-5. Home: `Deploy Account`
-6. Policies: `Create + Register` a session key
-7. Agent: Ask to send tokens and execute
-8. Denial test: Set a tiny cap, try to exceed it, confirm on-chain denial
-
-See `STATUS.md` for current progress.
-
-## Repo Layout
+## Repository Layout
 
 - `apps/mobile/`: Expo app (Expo Router)
-- `contracts/`: Starknet account-contract tooling/docs
-- `scripts/`: deterministic commands (CI calls these)
-- `spec.md`: product spec
+- `contracts/`: Starknet account-contract code and tests
+- `scripts/`: deterministic dev/CI commands
+- `spec.md`: product and protocol intent
 - `IMPLEMENTATION_PLAN.md`: milestone plan
-- `STATUS.md`: current state + verification steps
-- `CLAUDE.md`, `agents.md`, `.claude/skills/**`: agentic-native context and skills
+- `STATUS.md`: current state and verification recipe
+- `BYOA.md`: Bring Your Own Agent protocol
+- `agents.md` and `CLAUDE.md`: agent-oriented contribution context
 
-## Agentic-Native Development (Yes, On Purpose)
+## Connected Repositories
 
-This repository is structured so AI agents can work effectively without making the project unreviewable:
+Starkclaw is part of a multi-repo system. The key integrations are:
 
-- `STATUS.md` is the single source of truth for “what’s next” and “how to verify”.
-- `./scripts/check` is the contract between local dev and CI.
-- Changes should land as small vertical slices with frequent commits.
-- Secrets never belong in commits, logs, or prompts.
+1. `keep-starknet-strange/starknet-agentic`
+   - Relationship: canonical contract lineage source (`contracts/session-account`).
+   - How Starkclaw uses it:
+     - parity checks: `./scripts/contracts/check-session-account-parity.sh`
+     - class declaration flow: `./scripts/contracts/declare-session-account`
+     - optional override path: `UPSTREAM_SESSION_ACCOUNT_PATH`
+   - Why it matters: Starkclaw keeps wallet policy enforcement aligned with upstream session-account semantics.
 
-If you want to contribute with AI assistance, start with `CLAUDE.md` and `agents.md`.
+2. `keep-starknet-strange/starknet-keyring-proxy` (SISNA)
+   - Relationship: remote signer boundary for session-key signing.
+   - How Starkclaw uses it:
+     - signer client and runtime config in `apps/mobile/lib/signer/**`
+     - request auth headers (`x-keyring-*`) and strict response validation in `keyring-proxy-signer.ts`
+     - transport hardening via TLS pinning + environment guards
+   - Why it matters: signing keys stay isolated behind a hardened proxy boundary instead of living in the app runtime.
+
+Integration rule of thumb:
+
+- Contract/API changes in upstream repos must be reflected in Starkclaw parity checks, signer adapters, and mobile execution wiring before release.
+
+## BYOA (Bring Your Own Agent)
+
+Starkclaw supports autonomous multi-agent contribution through GitHub-native coordination.
+
+Start here:
+
+- `BYOA.md` for protocol
+- `agents.md` for repository-specific agent instructions
+
+## Versioning and Releases
+
+- Changelog: `CHANGELOG.md`
+- Versioning policy: `VERSIONING.md`
+
+Until `1.0.0`, the project follows strict pre-1.0 semantic intent with explicit release notes and security callouts.
 
 ## Contributing
 
-If you’re excited by “agents that can spend, but only within guardrails”, we want you here.
+1. Pick or open a focused issue.
+2. Ship small, verifiable vertical slices.
+3. Run `./scripts/check` before opening PR.
+4. Update `STATUS.md` if verification flow changes.
 
-High-leverage contributions:
+For contribution norms and templates, see:
 
-- LLM provider adapter + streaming chat (keeping keys out of model context)
-- Better policy UX (multi-target allowlists, selector allowlists)
-- Devnet-first onboarding (lower friction than Sepolia declare/deploy)
-- UI polish (premium “trustworthy wallet” feel)
-- Security hardening + tests
-
-Workflow:
-
-1. Pick an issue (or open one with a crisp problem statement).
-2. Keep PRs small and runnable.
-3. Run `./scripts/check` before opening a PR.
-4. Update `STATUS.md` when you change the verification story.
+- `CONTRIBUTING.md`
+- `.github/ISSUE_TEMPLATE/`
+- `.github/pull_request_template.md`
 
 ## Security
 
-This is experimental software.
+This project is experimental and security-sensitive.
 
-- Do not use mainnet funds.
-- Do not assume the contract or app is hardened against real adversaries.
-- The core security claim is *bounded authority* via on-chain policy, not "the agent is safe".
+- Do not commit secrets or keys.
+- Do not assume prompt-level controls are sufficient safety.
+- Treat on-chain policy as the trust boundary.
 
-If you find a vulnerability, please report it responsibly. See [SECURITY.md](./SECURITY.md) for reporting guidelines.
-
-## Acknowledgements
-
-- Canonical AA safety-rails lineage is `keep-starknet-strange/starknet-agentic/contracts/session-account`.
-- Starknet.js for transaction building and signing.
+Report vulnerabilities via `SECURITY.md`.
 
 ## License
 
-MIT. See `LICENSE`.
+MIT (`LICENSE`).
