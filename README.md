@@ -130,17 +130,26 @@ Once live mode is available, the flow will be:
 
 ### One-Time: Declare The Account Class
 
-The AA account class must be declared on Sepolia before anyone can deploy instances of it.
+Canonical path (session-account lineage from `starknet-agentic`):
 
 ```bash
 STARKNET_DEPLOYER_ADDRESS=0x... \
 STARKNET_DEPLOYER_PRIVATE_KEY=0x... \
-./scripts/contracts/declare-agent-account
+./scripts/contracts/declare-session-account
 ```
 
 Notes:
 - `STARKNET_RPC_URL` is optional (defaults to publicnode Sepolia)
 - You need a funded deployer account for fees
+- `UPSTREAM_SESSION_ACCOUNT_PATH` is optional to override source location
+- `EXPECTED_SESSION_ACCOUNT_CLASS_HASH` is optional but pinned by default; declare fails on mismatch
+- Existing wallets without persisted class-hash metadata remain on legacy hash addressing (no silent remap)
+
+Legacy fallback (migration/debug only):
+
+```bash
+./scripts/contracts/declare-agent-account
+```
 
 ### In The App (Planned)
 
@@ -158,7 +167,7 @@ See `STATUS.md` for current progress.
 ## Repo Layout
 
 - `apps/mobile/`: Expo app (Expo Router)
-- `contracts/agent-account/`: Cairo account contract + tests (the “safety rails”)
+- `contracts/agent-account/`: legacy Cairo account package retained during migration
 - `scripts/`: deterministic commands (CI calls these)
 - `spec.md`: product spec
 - `IMPLEMENTATION_PLAN.md`: milestone plan

@@ -3,6 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
+# Legacy path (AgentAccount). Keep only for migration/debug fallback.
+# Canonical production path is: ./scripts/contracts/declare-session-account
+
 # Uses starknet.js from apps/mobile to avoid duplicating dependencies at repo root.
 node "$ROOT_DIR/apps/mobile/scripts/declare-agent-account.mjs"
-

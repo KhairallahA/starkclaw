@@ -1,13 +1,15 @@
 import * as Crypto from "expo-crypto";
 import { ec, hash } from "starknet";
 
-import { AGENT_ACCOUNT_CLASS_HASH } from "../starknet/contracts";
+import { SESSION_ACCOUNT_CLASS_HASH } from "../starknet/contracts";
 import { STARKNET_NETWORKS, type StarknetNetworkId } from "../starknet/networks";
 import { secureDelete, secureGet, secureSet } from "../storage/secure-store";
+import { resolveWalletAccountClassHash } from "./class-hash";
 
 const OWNER_PRIVATE_KEY_ID = "starkclaw.owner_pk.v1";
 const NETWORK_ID = "starkclaw.network_id.v1";
 const DEPLOY_TX_HASH_ID = "starkclaw.deploy_tx_hash.v1";
+const ACCOUNT_CLASS_HASH_ID = "starkclaw.account_class_hash.v1";
 
 export type WalletSnapshot = {
   networkId: StarknetNetworkId;
@@ -34,12 +36,12 @@ function normalizePrivateKey(bytes: Uint8Array): string {
   return `0x${scalar.toString(16).padStart(64, "0")}`;
 }
 
-function computeAccountAddress(ownerPublicKey: string): string {
+function computeAccountAddress(ownerPublicKey: string, classHash: string): string {
   const salt = ownerPublicKey;
   const constructorCalldata = [ownerPublicKey, "0x0"];
   return hash.calculateContractAddressFromHash(
     salt,
-    AGENT_ACCOUNT_CLASS_HASH,
+    classHash,
     constructorCalldata,
     0
   );
@@ -52,8 +54,12 @@ export async function loadWallet(): Promise<WalletSnapshot | null> {
   const networkId = ((await secureGet(NETWORK_ID)) ?? "sepolia") as StarknetNetworkId;
   const network = STARKNET_NETWORKS[networkId] ?? STARKNET_NETWORKS.sepolia;
 
+  const accountClassHash = resolveWalletAccountClassHash(
+    await secureGet(ACCOUNT_CLASS_HASH_ID)
+  );
+
   const ownerPublicKey = ec.starkCurve.getStarkKey(pk);
-  const accountAddress = computeAccountAddress(ownerPublicKey);
+  const accountAddress = computeAccountAddress(ownerPublicKey, accountClassHash);
 
   return {
     networkId: network.id,
@@ -74,9 +80,10 @@ export async function createWallet(
 
   await secureSet(OWNER_PRIVATE_KEY_ID, pk);
   await secureSet(NETWORK_ID, networkId);
+  await secureSet(ACCOUNT_CLASS_HASH_ID, SESSION_ACCOUNT_CLASS_HASH);
 
   const ownerPublicKey = ec.starkCurve.getStarkKey(pk);
-  const accountAddress = computeAccountAddress(ownerPublicKey);
+  const accountAddress = computeAccountAddress(ownerPublicKey, SESSION_ACCOUNT_CLASS_HASH);
 
   return {
     networkId,
@@ -91,4 +98,5 @@ export async function resetWallet(): Promise<void> {
   await secureDelete(OWNER_PRIVATE_KEY_ID);
   await secureDelete(NETWORK_ID);
   await secureDelete(DEPLOY_TX_HASH_ID);
+  await secureDelete(ACCOUNT_CLASS_HASH_ID);
 }
