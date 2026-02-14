@@ -73,8 +73,19 @@ function isLoopbackHost(hostname: string): boolean {
 }
 
 export function getSignerMode(): SignerMode {
-  const mode = (process.env.EXPO_PUBLIC_SIGNER_MODE ?? "local").trim().toLowerCase();
-  return mode === "remote" ? "remote" : "local";
+  const raw = process.env.EXPO_PUBLIC_SIGNER_MODE?.trim().toLowerCase();
+  if (!raw) {
+    // Default to "remote" so a missing env var does not silently disable the
+    // session-key isolation boundary provided by the SISNA proxy.
+    return "remote";
+  }
+  if (raw !== "local" && raw !== "remote") {
+    throw new SignerRuntimeConfigError(
+      "MISSING_CREDENTIALS",
+      `Invalid EXPO_PUBLIC_SIGNER_MODE "${raw}". Expected "local" or "remote".`,
+    );
+  }
+  return raw;
 }
 
 export async function saveSignerCredentials(credentials: StoredSignerCredentials): Promise<void> {
