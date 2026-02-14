@@ -45,8 +45,8 @@ describe("runtime-config", () => {
     secureDeleteMock.mockReset();
   });
 
-  it("defaults signer mode to local", () => {
-    expect(getSignerMode()).toBe("local");
+  it("defaults signer mode to remote", () => {
+    expect(getSignerMode()).toBe("remote");
   });
 
   it("returns remote signer mode when explicitly configured", () => {
@@ -54,11 +54,13 @@ describe("runtime-config", () => {
     expect(getSignerMode()).toBe("remote");
   });
 
-  it("falls back to local signer mode for unknown values", () => {
+  it("normalizes valid values and rejects unknown values", () => {
     process.env.EXPO_PUBLIC_SIGNER_MODE = "REMOTE ";
     expect(getSignerMode()).toBe("remote");
     process.env.EXPO_PUBLIC_SIGNER_MODE = "something-else";
-    expect(getSignerMode()).toBe("local");
+    expect(() => getSignerMode()).toThrowError(
+      'Invalid EXPO_PUBLIC_SIGNER_MODE "something-else". Expected "local" or "remote".',
+    );
   });
 
   it("fails remote mode when proxy url is missing", async () => {

@@ -45,12 +45,20 @@ export class SessionKeySigner extends SignerInterface {
   }
 
   async signTransaction(
-    transactions: Call[],
-    transactionsDetail: InvocationsSignerDetails
+    _transactions: Call[],
+    _transactionsDetail: InvocationsSignerDetails
   ): Promise<Signature> {
-    const sig = await this.inner.signTransaction(transactions, transactionsDetail);
-    const [r, s] = signatureToArray(sig);
-    return [this.sessionPublicKey, r, s, `0x${this.validUntil.toString(16)}`];
+    // The generic Signer.signTransaction() signs over the standard starknet
+    // tx hash, but the session-account contract validates a custom hash path
+    // that includes valid_until. Using the local signer here would produce
+    // signatures that silently fail on-chain validation.
+    // Use the remote SISNA proxy signer for session key transactions.
+    throw new Error(
+      "SessionKeySigner.signTransaction is not supported in local mode. " +
+      "The on-chain session account validates a custom message hash that " +
+      "the generic starknet.js Signer cannot produce. Use remote signer mode " +
+      "(EXPO_PUBLIC_SIGNER_MODE=remote) with the SISNA proxy instead."
+    );
   }
 
   async signDeployAccountTransaction(details: DeployAccountSignerDetails): Promise<Signature> {
