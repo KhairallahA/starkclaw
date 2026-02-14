@@ -7,7 +7,7 @@
  * mobile_action_id -> signer_request_id -> tx_hash
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActivityItem } from "../activity";
 import { appendActivity, listActivity } from "../activity";
 
