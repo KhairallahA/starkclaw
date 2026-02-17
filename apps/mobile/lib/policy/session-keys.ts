@@ -113,10 +113,10 @@ export async function registerSessionKeyOnchain(params: {
     ownerPrivateKey: params.ownerPrivateKey,
   });
 
-  // Build allowed entrypoints from allowed contracts
-  // Map each contract address to its entrypoint selectors
-  // For simplicity, we allow common entrypoints for each contract
-  const allowedEntrypoints = buildAllowedEntrypoints(params.session.allowedContracts);
+  // Build allowed entrypoints for the session key
+  // Note: session-account API only supports entrypoint selectors, not contract-level restrictions.
+  // Contract targeting (allowedContracts) is stored locally but not enforced on-chain yet.
+  const allowedEntrypoints = buildAllowedEntrypoints();
 
   // Call add_or_update_session_key(key, valid_until, max_calls, allowed_entrypoints)
   // New session-account API: add_or_update_session_key replaces old register_session_key
@@ -152,10 +152,10 @@ export async function registerSessionKeyOnchain(params: {
 }
 
 /**
- * Build allowed entrypoint selectors from allowed contracts.
- * Returns array of selector hashes for common transaction entrypoints.
+ * Build allowed entrypoint selectors for session keys.
+ * Returns a fixed list of common entrypoint selector hashes.
  */
-function buildAllowedEntrypoints(allowedContracts: string[]): string[] {
+function buildAllowedEntrypoints(): string[] {
   // Common entrypoints that session keys typically need
   const commonEntrypoints = [
     "transfer",
