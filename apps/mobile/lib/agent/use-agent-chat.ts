@@ -6,6 +6,10 @@
 
 import * as React from "react";
 
+import { loadApiKey, hasApiKey, createProvider } from "../agent-runtime/provider-store";
+import { executeTool } from "../agent-runtime/tools/registry";
+import type { ChatMessage as LlmMessage, ChatStream, ParsedToolCall } from "../agent-runtime/types";
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -29,6 +33,10 @@ export type AgentChatState = {
   messages: ChatMessage[];
   toolCalls: ToolCall[];
   isResponding: boolean;
+  /** Whether API key is configured for live mode */
+  hasApiKey: boolean;
+  /** Error message if live mode fails */
+  error?: string;
 };
 
 type AgentChatActions = {
@@ -36,6 +44,336 @@ type AgentChatActions = {
   cancelResponse: () => void;
   clearHistory: () => void;
 };
+
+/**
+ * System prompt for the agent
+ */
+const AGENT_SYSTEM_PROMPT = `You are Starkclaw, an AI agent for Starknet. You help users manage their wallet, check balances, and execute transfers.
+
+Available tools:
+- get_balances: Read ERC-20 balances (ETH, USDC, STRK)
+- prepare_transfer: Validate and prepare a transfer without executing
+- estimate_fee: Estimate gas fees
+- execute_transfer: Execute a transfer using session signing
+
+When asked to check balances or transfer tokens, use the appropriate tool.
+Always confirm before executing transfers.`;
+
+function messageToLlmFormat(messages: ChatMessage[]): LlmMessage[] {
+  return messages.map((m) => ({
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.text,
+  }));
+}
+
+/**
+ * Live implementation that uses real LLM with streaming
+ */
+export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
+  const [state, setState] = React.useState<AgentChatState>({
+    messages: [],
+    toolCalls: [],
+    isResponding: false,
+    hasApiKey: false,
+  });
+  
+  const abortRef = React.useRef<(() => void) | null>(null);
+  const streamingRef = React.useRef<ChatStream | null>(null);
+  
+  // Check for API key on mount
+  React.useEffect(() => {
+    hasApiKey().then((has) => {
+      setState((s) => ({ ...s, hasApiKey: has }));
+    });
+  }, []);
+
+  const cancelResponse = React.useCallback(() => {
+    if (streamingRef.current) {
+      streamingRef.current.cancel();
+    }
+    if (abortRef.current) {
+      abortRef.current();
+    }
+    setState((s) => ({
+      ...s,
+      isResponding: false,
+      messages: s.messages.map((m) => ({ ...m, isStreaming: false })),
+    }));
+  }, []);
+
+  const clearHistory = React.useCallback(() => {
+    cancelResponse();
+    setState((s) => ({
+      ...s,
+      messages: [],
+      toolCalls: [],
+      isResponding: false,
+    }));
+  }, [cancelResponse]);
+
+  const sendMessage = React.useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || state.isResponding) return;
+
+    // Add user message
+    const userMsg: ChatMessage = {
+      id: `msg-${Date.now()}-user`,
+      role: "user",
+      text: trimmed,
+      createdAt: Date.now(),
+    };
+
+    setState((s) => ({
+      ...s,
+      messages: [...s.messages, userMsg],
+      isResponding: true,
+      error: undefined,
+    }));
+
+    try {
+      // Check for API key
+      const apiKey = await loadApiKey();
+      if (!apiKey) {
+        setState((s) => ({
+          ...s,
+          isResponding: false,
+          hasApiKey: false,
+          error: "No API key configured. Please configure your API key in settings.",
+        }));
+        return;
+      }
+
+      const provider = await createProvider();
+      if (!provider) {
+        setState((s) => ({
+          ...s,
+          isResponding: false,
+          error: "Failed to create LLM provider. Check your configuration.",
+        }));
+        return;
+      }
+
+      // Build conversation messages including current user input
+      const allMessages = [...state.messages, userMsg];
+      const llmMessages = messageToLlmFormat(allMessages);
+
+      // Helper to call LLM with current messages
+      const callLlm = async (msgs: LlmMessage[], tools?: unknown[]) => {
+        return provider.streamChat({
+          model: "gpt-4o-mini",
+          systemPrompt: AGENT_SYSTEM_PROMPT,
+          messages: msgs,
+          tools: tools as any,
+        });
+      };
+
+      // Get tool definitions for LLM
+      const toolDefs = [
+        {
+          type: "function" as const,
+          function: {
+            name: "get_balances",
+            description: "Get ERC-20 token balances for the wallet",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "prepare_transfer",
+            description: "Prepare a token transfer (validates without executing)",
+            parameters: {
+              type: "object",
+              properties: {
+                token: { type: "string", description: "Token symbol (ETH, USDC, STRK)" },
+                amount: { type: "string", description: "Amount to transfer" },
+                recipient: { type: "string", description: "Recipient address (0x...)" },
+              },
+              required: ["token", "amount", "recipient"],
+            },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "estimate_fee",
+            description: "Estimate gas fee for a transaction",
+            parameters: {
+              type: "object",
+              properties: {
+                token: { type: "string", description: "Token symbol (ETH, USDC, STRK)" },
+                amount: { type: "string", description: "Amount to transfer" },
+                recipient: { type: "string", description: "Recipient address (0x...)" },
+              },
+              required: ["token", "amount", "recipient"],
+            },
+          },
+        },
+        {
+          type: "function" as const,
+          function: {
+            name: "execute_transfer",
+            description: "Execute a prepared token transfer",
+            parameters: {
+              type: "object",
+              properties: {
+                token: { type: "string", description: "Token symbol (ETH, USDC, STRK)" },
+                amount: { type: "string", description: "Amount to transfer" },
+                recipient: { type: "string", description: "Recipient address (0x...)" },
+              },
+              required: ["token", "amount", "recipient"],
+            },
+          },
+        },
+      ];
+
+      // Initial LLM call with tools
+      let stream = await callLlm(llmMessages, toolDefs);
+      streamingRef.current = stream;
+
+      let fullText = "";
+      let currentToolCalls: ParsedToolCall[] = [];
+      let toolCallBuffer = "";
+
+      // Process streaming response
+      for await (const chunk of stream) {
+        if (chunk.type === "delta") {
+          fullText += chunk.text;
+          
+          setState((s) => ({
+            ...s,
+            messages: [
+              ...s.messages.slice(0, -1),
+              { ...userMsg, text: trimmed },
+              {
+                id: `msg-${Date.now()}-assistant`,
+                role: "assistant",
+                text: fullText,
+                createdAt: Date.now(),
+                isStreaming: true,
+              },
+            ],
+          }));
+        } else if (chunk.type === "tool_call") {
+          // Add tool call to our list
+          const tc = chunk.toolCall;
+          currentToolCalls.push(tc);
+          
+          // Add tool call to state
+          const toolCallEntry: ToolCall = {
+            id: tc.id,
+            toolName: tc.name,
+            params: tc.arguments,
+            timestamp: new Date().toISOString(),
+            operationType: "write",
+            status: "pending",
+          };
+          
+          setState((s) => ({
+            ...s,
+            toolCalls: [...s.toolCalls, toolCallEntry],
+          }));
+        } else if (chunk.type === "done") {
+          break;
+        }
+      }
+
+      // If we have tool calls, execute them and send results back to LLM
+      if (currentToolCalls.length > 0) {
+        const toolResults: { tool_call_id: string; content: string }[] = [];
+
+        for (const tc of currentToolCalls) {
+          const result = await executeTool(tc.name, tc.arguments);
+          const resultStr = result.ok 
+            ? JSON.stringify(result.data) 
+            : `Error: ${result.error}`;
+          
+          toolResults.push({
+            tool_call_id: tc.id,
+            content: resultStr,
+          });
+
+          // Update tool call status in state
+          setState((s) => ({
+            ...s,
+            toolCalls: s.toolCalls.map((t) =>
+              t.id === tc.id
+                ? { ...t, result: resultStr, status: result.ok ? "success" : "error" }
+                : t
+            ),
+          }));
+        }
+
+        // Add assistant message with tool calls to conversation
+        const assistantMsg: LlmMessage = {
+          role: "assistant",
+          content: fullText || "Using tools...",
+        };
+
+        // Add tool result messages
+        const toolResultMessages: LlmMessage[] = toolResults.map((tr) => ({
+          role: "tool" as const,
+          content: tr.content,
+          toolCallId: tr.tool_call_id,
+        }));
+
+        // Call LLM again with tool results
+        const updatedMessages = [...llmMessages, assistantMsg, ...toolResultMessages];
+        stream = await callLlm(updatedMessages, toolDefs);
+        streamingRef.current = stream;
+
+        fullText = "";
+        
+        for await (const chunk of stream) {
+          if (chunk.type === "delta") {
+            fullText += chunk.text;
+            
+            setState((s) => ({
+              ...s,
+              messages: [
+                ...s.messages.slice(0, -1),
+                { ...userMsg, text: trimmed },
+                {
+                  id: `msg-${Date.now()}-assistant`,
+                  role: "assistant",
+                  text: fullText,
+                  createdAt: Date.now(),
+                  isStreaming: true,
+                },
+              ],
+            }));
+          } else if (chunk.type === "done") {
+            break;
+          }
+        }
+      }
+
+      // Mark as complete
+      setState((s) => ({
+        ...s,
+        messages: s.messages.map((m) => ({ ...m, isStreaming: false })),
+        isResponding: false,
+      }));
+
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Unknown error";
+      setState((s) => ({
+        ...s,
+        isResponding: false,
+        error: `Error: ${errorMsg}`,
+      }));
+    }
+  }, [state.messages, state.isResponding]);
+
+  return [
+    state,
+    { sendMessage, cancelResponse, clearHistory },
+  ];
+}
 
 /**
  * Simulates streaming for demo mode
@@ -56,6 +394,7 @@ export function useAgentChatDemo(): [AgentChatState, AgentChatActions] {
     messages: [],
     toolCalls: [],
     isResponding: false,
+    hasApiKey: true, // Demo mode always has "API key"
   });
 
   const cancelRef = React.useRef(false);
@@ -177,6 +516,7 @@ export function useAgentChatDemo(): [AgentChatState, AgentChatActions] {
         messages: [],
         toolCalls: [],
         isResponding: false,
+        hasApiKey: true,
       });
     },
   };

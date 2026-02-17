@@ -9,6 +9,7 @@ import { useApp } from "@/lib/app/app-provider";
 import { requireOwnerAuth } from "@/lib/security/owner-auth";
 import { loadWallet, type WalletSnapshot } from "@/lib/wallet/wallet";
 import { useTransfer } from "@/lib/agent/use-transfer";
+import { useAgentChatDemo, useAgentChatLive, type ToolCall } from "@/lib/agent/use-agent-chat";
 import { GhostButton, IconButton, PrimaryButton } from "@/ui/buttons";
 import { AppIcon } from "@/ui/app-icon";
 import { Badge } from "@/ui/badge";
@@ -51,6 +52,14 @@ export default function AgentScreen() {
       loadWallet().then(setWallet);
     }
   }, [isLive]);
+
+  // Always call both hooks (React rule: hooks cannot be conditional)
+  const [demoChatState, demoChatActions] = useAgentChatDemo();
+  const [liveChatState, liveChatActions] = useAgentChatLive();
+  
+  // Use appropriate chat based on mode
+  const chatState = isLive ? liveChatState : demoChatState;
+  const chatActions = isLive ? liveChatActions : demoChatActions;
 
   const [draft, setDraft] = React.useState("");
 
@@ -302,13 +311,30 @@ export default function AgentScreen() {
                 <View style={{ gap: 10 }}>
                   <Row>
                     <H2>Conversation</H2>
-                    <Muted>{state.agent.messages.length} messages</Muted>
+                    <Muted>{isLive ? chatState.messages.length : state.agent.messages.length} messages</Muted>
                   </Row>
                   <View style={{ gap: 10 }}>
-                    {state.agent.messages.map((m) => (
-                      <MessageBubble key={m.id} role={m.role} text={m.text} />
+                    {(isLive ? chatState.messages : state.agent.messages).map((m) => (
+                      <MessageBubble key={m.id} role={m.role} text={m.text} isStreaming={(m as any).isStreaming} />
                     ))}
                   </View>
+                  
+                  {/* Show error if any */}
+                  {chatState.error && (
+                    <View style={{ padding: 10, borderRadius: t.radius.md, backgroundColor: "rgba(255,69,58,0.10)" }}>
+                      <Muted style={{ color: t.colors.bad }}>{chatState.error}</Muted>
+                    </View>
+                  )}
+                  
+                  {/* Show tool calls in live mode */}
+                  {isLive && chatState.toolCalls.length > 0 && (
+                    <View style={{ gap: 8 }}>
+                      <Muted>Tool Calls</Muted>
+                      {chatState.toolCalls.map((tc) => (
+                        <ToolCallCard key={tc.id} toolCall={tc} />
+                      ))}
+                    </View>
+                  )}
                 </View>
               </GlassCard>
             </Animated.View>
@@ -353,8 +379,8 @@ export default function AgentScreen() {
                 }}
               />
               <IconButton
-                disabled={!draft.trim() || transfer.phase === "preparing" || transfer.phase === "executing"}
-                tone={draft.trim() && transfer.phase !== "preparing" && transfer.phase !== "executing" ? "accent" : "neutral"}
+                disabled={!draft.trim() || transfer.phase === "preparing" || transfer.phase === "executing" || chatState.isResponding}
+                tone={draft.trim() && transfer.phase !== "preparing" && transfer.phase !== "executing" && !chatState.isResponding ? "accent" : "neutral"}
                 onPress={async () => {
                   await haptic("tap");
                   const text = draft.trim();
@@ -363,6 +389,9 @@ export default function AgentScreen() {
                   // Live mode: check if it's a transfer request
                   if (isLive && isTransferRequest(text)) {
                     await transfer.prepare(text);
+                  } else if (isLive) {
+                    // Live mode: send to LLM chat
+                    await chatActions.sendMessage(text);
                   } else {
                     // Demo mode or non-transfer message
                     actions.sendAgentMessage(text);
@@ -375,6 +404,37 @@ export default function AgentScreen() {
         </View>
       </KeyboardAvoidingView>
     </AppBackground>
+  );
+}
+
+/** Tool call card for live mode - shows tool execution status */
+function ToolCallCard(props: { toolCall: ToolCall }) {
+  const t = useAppTheme();
+  const { toolCall } = props;
+  
+  const statusLabel = toolCall.status === "success" ? "✓" : toolCall.status === "error" ? "✗" : "…";
+  
+  return (
+    <View style={{ 
+      padding: 10, 
+      borderRadius: t.radius.md, 
+      backgroundColor: t.scheme === "dark" ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.6)",
+      borderWidth: 1,
+      borderColor: t.colors.glassBorder,
+    }}>
+      <Row>
+        <Body style={{ fontFamily: t.font.bodySemibold }}>{toolCall.toolName}</Body>
+        <Badge label={statusLabel} tone={toolCall.status === "success" ? "good" : toolCall.status === "error" ? "danger" : "warn"} />
+      </Row>
+      <Muted style={{ fontSize: 11, marginTop: 4 }}>
+        {JSON.stringify(toolCall.params).slice(0, 100)}
+      </Muted>
+      {toolCall.result && (
+        <Muted style={{ fontSize: 11, marginTop: 4, color: t.colors.muted }}>
+          {String(toolCall.result).slice(0, 100)}
+        </Muted>
+      )}
+    </View>
   );
 }
 
@@ -414,7 +474,7 @@ function ToggleRow(props: { title: string; body: string; value: boolean; onChang
   );
 }
 
-function MessageBubble(props: { role: "user" | "assistant"; text: string }) {
+function MessageBubble(props: { role: "user" | "assistant"; text: string; isStreaming?: boolean }) {
   const t = useAppTheme();
   const isUser = props.role === "user";
   const borderA = isUser
@@ -432,8 +492,12 @@ function MessageBubble(props: { role: "user" | "assistant"; text: string }) {
     : t.scheme === "dark"
       ? "rgba(255,255,255,0.05)"
       : "rgba(255,255,255,0.60)";
+  
   return (
     <View style={{ alignSelf: isUser ? "flex-end" : "flex-start", maxWidth: "92%" }}>
+      {props.isStreaming && (
+        <Muted style={{ fontSize: 10, marginBottom: 2 }}>typing...</Muted>
+      )}
       <LinearGradient
         colors={[borderA, borderB]}
         start={{ x: 0.1, y: 0.0 }}

@@ -39,6 +39,29 @@ function parseSseLine(line: string): StreamChunk | null {
     if (typeof text === "string" && text.length > 0) {
       return { type: "delta", text };
     }
+
+    // Check for tool calls
+    const toolCalls = delta?.tool_calls;
+    if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+      for (const tc of toolCalls) {
+        if (tc?.id && tc?.function?.name) {
+          let args = {};
+          try {
+            args = JSON.parse(tc.function.arguments || "{}");
+          } catch {
+            // Partial arguments, skip for now
+          }
+          return {
+            type: "tool_call",
+            toolCall: {
+              id: tc.id,
+              name: tc.function.name,
+              arguments: args,
+            },
+          };
+        }
+      }
+    }
   } catch {
     // Malformed JSON — skip.
   }
