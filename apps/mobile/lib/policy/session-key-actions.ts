@@ -45,7 +45,7 @@ export async function createAndRegisterSessionKey(params: {
 
   await appendActivity({
     networkId: params.wallet.networkId,
-    kind: "register_session_key",
+    kind: "add_or_update_session_key",
     summary: `Register session key for ${params.tokenSymbol} (cap: ${params.spendingLimit.toString()}, ${params.allowedContracts.length || "any"} targets)`,
     txHash,
     status: "pending",

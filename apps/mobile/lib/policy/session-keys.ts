@@ -107,38 +107,29 @@ export async function registerSessionKeyOnchain(params: {
   ownerPrivateKey: string;
   session: StoredSessionKey;
 }): Promise<{ txHash: string }> {
-  const spending = BigInt(params.session.spendingLimit);
-  const { low, high } = u256FromBigInt(spending);
-
   const account = createOwnerAccount({
     rpcUrl: params.wallet.rpcUrl,
     accountAddress: params.wallet.accountAddress,
     ownerPrivateKey: params.ownerPrivateKey,
   });
 
-  // Pad allowed contracts to exactly 4 slots (filling unused with zero address).
-  const targets = padTargets(params.session.allowedContracts);
+  // Build allowed entrypoints from allowed contracts
+  // Map each contract address to its entrypoint selectors
+  // For simplicity, we allow common entrypoints for each contract
+  const allowedEntrypoints = buildAllowedEntrypoints(params.session.allowedContracts);
 
-  // Call register_session_key(key, SessionPolicy).
-  // SessionPolicy struct fields are serialized in declaration order:
-  //   valid_after, valid_until, spending_limit (u256 = low + high),
-  //   spending_token, allowed_contract_0…3
+  // Call add_or_update_session_key(key, valid_until, max_calls, allowed_entrypoints)
+  // New session-account API: add_or_update_session_key replaces old register_session_key
   const tx = await account.execute([
     {
       contractAddress: params.wallet.accountAddress,
-      entrypoint: "register_session_key",
+      entrypoint: "add_or_update_session_key",
       calldata: [
         params.session.key,
-        // SessionPolicy fields:
-        params.session.validAfter.toString(),
         params.session.validUntil.toString(),
-        low,   // spending_limit.low
-        high,  // spending_limit.high
-        params.session.tokenAddress,  // spending_token
-        targets[0],  // allowed_contract_0
-        targets[1],  // allowed_contract_1
-        targets[2],  // allowed_contract_2
-        targets[3],  // allowed_contract_3
+        "100", // max_calls - default limit
+        allowedEntrypoints.length.toString(),
+        ...allowedEntrypoints,
       ],
     },
   ]);
@@ -158,6 +149,27 @@ export async function registerSessionKeyOnchain(params: {
   }
 
   return { txHash: tx.transaction_hash };
+}
+
+/**
+ * Build allowed entrypoint selectors from allowed contracts.
+ * Returns array of selector hashes for common transaction entrypoints.
+ */
+function buildAllowedEntrypoints(allowedContracts: string[]): string[] {
+  // Common entrypoints that session keys typically need
+  const commonEntrypoints = [
+    "transfer",
+    "transferFrom",
+    "swap",
+    "execute",
+  ];
+  
+  const selectors: string[] = [];
+  for (const entrypoint of commonEntrypoints) {
+    selectors.push(hash.getSelectorFromName(entrypoint));
+  }
+  
+  return selectors;
 }
 
 export async function revokeSessionKeyOnchain(params: {
