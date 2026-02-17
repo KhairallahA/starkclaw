@@ -151,9 +151,6 @@ async function* streamSse(
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    
-    // Create fresh buffer for this stream - avoids shared state between calls
-    const toolCallBuffers = new Map<string, string>();
 
     while (true) {
       const { done, value } = await reader.read();
