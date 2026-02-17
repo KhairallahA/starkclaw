@@ -42,7 +42,10 @@ vi.mock("@/lib/storage/secure-store", () => ({
 import {
   isSessionKeyValidOnchain,
   registerSessionKeyOnchain,
+  DEFAULT_MAX_CALLS,
+  COMMON_ENTRYPOINTS,
 } from "@/lib/policy/session-keys";
+import { hash } from "starknet";
 import type { StoredSessionKey } from "@/lib/policy/session-keys";
 
 const SESSION_KEYS_INDEX_ID = "starkclaw.session_keys.v1";
@@ -104,8 +107,14 @@ describe("session-keys migration", () => {
     // Calldata: [key, valid_until, max_calls, entrypoints_len, ...entrypoints]
     expect(calls[0].calldata[0]).toBe(session.key);
     expect(calls[0].calldata[1]).toBe(session.validUntil.toString()); // valid_until
-    expect(calls[0].calldata[2]).toBe("100"); // max_calls
-    expect(calls[0].calldata[3]).toBe("4"); // entrypoints_len (transfer, transferFrom, swap, execute)
+    expect(calls[0].calldata[2]).toBe(DEFAULT_MAX_CALLS.toString()); // max_calls
+    expect(calls[0].calldata[3]).toBe(COMMON_ENTRYPOINTS.length.toString()); // entrypoints_len
+    
+    // Validate entrypoint selectors
+    const expectedSelectors = COMMON_ENTRYPOINTS.map((name) => hash.getSelectorFromName(name));
+    for (let i = 0; i < COMMON_ENTRYPOINTS.length; i++) {
+      expect(calls[0].calldata[4 + i]).toBe(expectedSelectors[i]);
+    }
 
     const persisted = JSON.parse(
       hoisted.store.get(SESSION_KEYS_INDEX_ID) ?? "[]"
@@ -115,6 +124,7 @@ describe("session-keys migration", () => {
   });
 
   it("validates session key by get_session_data fields", async () => {
+    // Future valid_until, calls_used < max_calls -> valid
     hoisted.callContract.mockResolvedValueOnce(["0x7fffffff", "0x64", "0x1", "0x1"]);
     const valid = await isSessionKeyValidOnchain({
       rpcUrl: wallet.rpcUrl,
@@ -128,7 +138,8 @@ describe("session-keys migration", () => {
       calldata: [session.key],
     });
 
-    hoisted.callContract.mockResolvedValueOnce(["0x1", "0x64", "0x64", "0x1"]);
+    // Future valid_until but calls_used >= max_calls -> exhausted
+    hoisted.callContract.mockResolvedValueOnce(["0x7fffffff", "0x64", "0x64", "0x1"]);
     const exhausted = await isSessionKeyValidOnchain({
       rpcUrl: wallet.rpcUrl,
       accountAddress: wallet.accountAddress,

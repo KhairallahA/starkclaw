@@ -10,6 +10,12 @@ import { MAX_ALLOWED_TARGETS, ZERO_ADDRESS, padTargets } from "./target-presets"
 
 const SESSION_KEYS_INDEX_ID = "starkclaw.session_keys.v1";
 
+/** Default max calls for session keys. */
+export const DEFAULT_MAX_CALLS = 100;
+
+/** Common entrypoint names allowed for session keys. */
+export const COMMON_ENTRYPOINTS = ["transfer", "transferFrom", "swap", "execute"] as const;
+
 function sessionPkStorageKey(sessionPublicKey: string): string {
   return `starkclaw.session_pk.${sessionPublicKey}`;
 }
@@ -137,7 +143,7 @@ export async function registerSessionKeyOnchain(params: {
       calldata: [
         params.session.key,
         params.session.validUntil.toString(),
-        "100", // max_calls - default limit
+        DEFAULT_MAX_CALLS.toString(), // max_calls - default limit
         allowedEntrypoints.length.toString(),
         ...allowedEntrypoints,
       ],
@@ -166,19 +172,10 @@ export async function registerSessionKeyOnchain(params: {
  * Returns a fixed list of common entrypoint selector hashes.
  */
 function buildAllowedEntrypoints(): string[] {
-  // Common entrypoints that session keys typically need
-  const commonEntrypoints = [
-    "transfer",
-    "transferFrom",
-    "swap",
-    "execute",
-  ];
-  
   const selectors: string[] = [];
-  for (const entrypoint of commonEntrypoints) {
+  for (const entrypoint of COMMON_ENTRYPOINTS) {
     selectors.push(hash.getSelectorFromName(entrypoint));
   }
-  
   return selectors;
 }
 
