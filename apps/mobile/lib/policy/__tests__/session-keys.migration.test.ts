@@ -62,7 +62,7 @@ const session: StoredSessionKey = {
   spendingLimit: "1000",
   validAfter: 100,
   validUntil: 2000,
-  allowedContracts: ["0x444"],
+  allowedContracts: [], // Empty: entrypoint-only restrictions (supported by session-account API)
   createdAt: 100,
 };
 

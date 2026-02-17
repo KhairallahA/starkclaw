@@ -116,6 +116,16 @@ export async function registerSessionKeyOnchain(params: {
   // Build allowed entrypoints for the session key
   // Note: session-account API only supports entrypoint selectors, not contract-level restrictions.
   // Contract targeting (allowedContracts) is stored locally but not enforced on-chain yet.
+  
+  // Validate: block registration if contract-level restrictions are requested
+  // (not supported by session-account API)
+  if (params.session.allowedContracts && params.session.allowedContracts.length > 0) {
+    throw new Error(
+      "Contract-level restrictions are not supported by session-account API. " +
+      "Only entrypoint selectors are enforced on-chain. Remove allowedContracts or use a future API version."
+    );
+  }
+  
   const allowedEntrypoints = buildAllowedEntrypoints();
 
   // Call add_or_update_session_key(key, valid_until, max_calls, allowed_entrypoints)
