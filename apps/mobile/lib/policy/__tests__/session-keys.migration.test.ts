@@ -105,7 +105,7 @@ describe("session-keys migration", () => {
     expect(calls[0].calldata[0]).toBe(session.key);
     expect(calls[0].calldata[1]).toBe(session.validUntil.toString()); // valid_until
     expect(calls[0].calldata[2]).toBe("100"); // max_calls
-    // Calldata[3] is entrypoints_len, followed by entrypoint selectors
+    expect(calls[0].calldata[3]).toBe("4"); // entrypoints_len (transfer, transferFrom, swap, execute)
 
     const persisted = JSON.parse(
       hoisted.store.get(SESSION_KEYS_INDEX_ID) ?? "[]"
