@@ -65,11 +65,13 @@ function parseSseLine(line: string, toolCallBuffers: Map<string, string>): Strea
           
           // Try to parse accumulated arguments
           let args = {};
+          let parseSucceeded = false;
           if (buffer) {
             try {
               // Only parse if it looks like complete JSON
               if (buffer.startsWith("{") && buffer.endsWith("}")) {
                 args = JSON.parse(buffer);
+                parseSucceeded = true;
                 // Clear buffer after successful parse
                 toolCallBuffers.delete(tcId);
               }
@@ -78,8 +80,9 @@ function parseSseLine(line: string, toolCallBuffers: Map<string, string>): Strea
             }
           }
           
-          // Only emit if we have valid args
-          if (Object.keys(args).length > 0 || !buffer) {
+          // Only emit if we have valid args or parse succeeded
+          // (parseSucceeded handles empty {} from tools like get_balances)
+          if (parseSucceeded || Object.keys(args).length > 0) {
             results.push({
               type: "tool_call",
               toolCall: {
