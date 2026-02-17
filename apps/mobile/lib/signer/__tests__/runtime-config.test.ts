@@ -15,6 +15,7 @@ import {
   getSignerMode,
   loadRemoteSignerRuntimeConfig,
   saveSignerCredentials,
+  isProductionMode,
 } from "../runtime-config";
 
 const secureGetMock = vi.mocked(secureGet);
@@ -369,5 +370,35 @@ describe("runtime-config", () => {
 
     secureGetMock.mockResolvedValue(JSON.stringify({}));
     await expect(loadSignerCredentials()).resolves.toBeNull();
+  });
+});
+
+describe("isProductionMode", () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it("returns true when EXPO_PUBLIC_IS_PRODUCTION is 'true'", () => {
+    process.env.EXPO_PUBLIC_IS_PRODUCTION = "true";
+    process.env.NODE_ENV = "development";
+    expect(isProductionMode()).toBe(true);
+  });
+
+  it("returns false when EXPO_PUBLIC_IS_PRODUCTION is 'false'", () => {
+    process.env.EXPO_PUBLIC_IS_PRODUCTION = "false";
+    process.env.NODE_ENV = "production";
+    expect(isProductionMode()).toBe(false);
+  });
+
+  it("falls back to NODE_ENV when EXPO_PUBLIC_IS_PRODUCTION is not set", () => {
+    delete process.env.EXPO_PUBLIC_IS_PRODUCTION;
+    process.env.NODE_ENV = "production";
+    expect(isProductionMode()).toBe(true);
   });
 });
