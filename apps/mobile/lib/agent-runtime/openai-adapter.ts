@@ -21,7 +21,8 @@ const DEFAULT_MODEL = "gpt-4o-mini";
 // SSE line parser
 // ---------------------------------------------------------------------------
 
-function parseSseLine(line: string): StreamChunk[] {
+/** Accumulator for tool call arguments - passed as parameter to avoid module-level state */
+function parseSseLine(line: string, toolCallBuffers: Map<string, string>): StreamChunk[] {
   if (!line.startsWith("data: ")) return [];
   const data = line.slice(6).trim();
   if (data === "[DONE]") return [{ type: "done", finishReason: "stop" }];
@@ -47,36 +48,47 @@ function parseSseLine(line: string): StreamChunk[] {
       
       for (const tc of toolCalls) {
         if (tc?.id && tc?.function?.name) {
-          // Accumulate arguments - they may come in fragments
           const tcId = tc.id;
           const funcName = tc.function.name;
           const newArgsFragment = tc.function.arguments || "";
           
-          // Use a buffer to accumulate (we'd need to track this per-call-id)
-          // For now, try to parse - if it fails, the arguments are incomplete
+          // Get or create accumulator for this tool call ID
+          let buffer = toolCallBuffers.get(tcId);
+          if (!buffer) {
+            buffer = "";
+            toolCallBuffers.set(tcId, buffer);
+          }
+          
+          // Append the new fragment
+          buffer += newArgsFragment;
+          toolCallBuffers.set(tcId, buffer);
+          
+          // Try to parse accumulated arguments
           let args = {};
-          if (newArgsFragment) {
-            // Try to parse the complete arguments string
-            // Note: In streaming, arguments come as JSON fragments
+          if (buffer) {
             try {
-              // If it's a complete JSON object, parse it
-              if (newArgsFragment.startsWith("{") && newArgsFragment.endsWith("}")) {
-                args = JSON.parse(newArgsFragment);
+              // Only parse if it looks like complete JSON
+              if (buffer.startsWith("{") && buffer.endsWith("}")) {
+                args = JSON.parse(buffer);
+                // Clear buffer after successful parse
+                toolCallBuffers.delete(tcId);
               }
             } catch {
-              // Partial arguments - emit with empty args, will be completed in next chunk
-              // For now, store as empty - the LLM should send complete args
+              // Partial arguments - will be completed in next chunk
             }
           }
           
-          results.push({
-            type: "tool_call",
-            toolCall: {
-              id: tcId,
-              name: funcName,
-              arguments: args,
-            },
-          });
+          // Only emit if we have valid args
+          if (Object.keys(args).length > 0 || !buffer) {
+            results.push({
+              type: "tool_call",
+              toolCall: {
+                id: tcId,
+                name: funcName,
+                arguments: args,
+              },
+            });
+          }
         }
       }
       
@@ -111,6 +123,9 @@ async function* streamSse(
   const abortOnParent = () => controller.abort();
   combinedSignal.addEventListener("abort", abortOnParent);
 
+  // Create fresh buffer for this stream - avoids shared state between calls
+  const toolCallBuffers = new Map<string, string>();
+
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -136,6 +151,9 @@ async function* streamSse(
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    
+    // Create fresh buffer for this stream - avoids shared state between calls
+    const toolCallBuffers = new Map<string, string>();
 
     while (true) {
       const { done, value } = await reader.read();
@@ -149,17 +167,20 @@ async function* streamSse(
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        const chunks = parseSseLine(trimmed);
+        const chunks = parseSseLine(trimmed, toolCallBuffers);
         for (const chunk of chunks) {
           yield chunk;
-          if (chunk.type === "done") return;
+          if (chunk.type === "done") {
+            toolCallBuffers.clear();
+            return;
+          }
         }
       }
     }
 
     // Process any remaining buffer.
     if (buffer.trim()) {
-      const chunks = parseSseLine(buffer.trim());
+      const chunks = parseSseLine(buffer.trim(), toolCallBuffers);
       for (const chunk of chunks) {
         yield chunk;
       }
@@ -170,6 +191,7 @@ async function* streamSse(
   } finally {
     clearTimeout(timeoutId);
     combinedSignal.removeEventListener("abort", abortOnParent);
+    toolCallBuffers.clear();
   }
 }
 

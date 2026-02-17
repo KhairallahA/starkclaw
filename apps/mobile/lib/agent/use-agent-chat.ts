@@ -174,12 +174,12 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
       const llmMessages = messageToLlmFormat(allMessages);
 
       // Helper to call LLM with current messages
-      const callLlm = async (msgs: LlmMessage[], tools?: unknown[]) => {
+      const callLlm = async (msgs: LlmMessage[], tools?: OpenAITool[]) => {
         return provider.streamChat({
           model: "gpt-4o-mini",
           systemPrompt: AGENT_SYSTEM_PROMPT,
           messages: msgs,
-          tools: toolDefs,
+          tools: (tools && tools.length > 0) ? tools : toolDefs,
         });
       };
 
@@ -253,7 +253,6 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
 
       let fullText = "";
       let currentToolCalls: ParsedToolCall[] = [];
-      let toolCallBuffer = "";
 
       // Process streaming response
       for await (const chunk of stream) {
@@ -323,7 +322,7 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
         }
 
         // Add assistant message with tool calls to conversation
-        const assistantMsg: LlmMessage = {
+        const toolContextMsg: LlmMessage = {
           role: "assistant",
           content: fullText || "Using tools...",
         };
@@ -336,7 +335,7 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
         }));
 
         // Call LLM again with tool results
-        const updatedMessages = [...llmMessages, assistantMsg, ...toolResultMessages];
+        const updatedMessages = [...llmMessages, toolContextMsg, ...toolResultMessages];
         stream = await callLlm(updatedMessages, toolDefs);
         streamingRef.current = stream;
 

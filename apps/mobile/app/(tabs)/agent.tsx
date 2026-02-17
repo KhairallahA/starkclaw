@@ -36,15 +36,25 @@ function shortenHex(input: string): string {
   return `${s.slice(0, 10)}…${s.slice(-6)}`;
 }
 
-/** Keys that may contain sensitive data */
-const SENSITIVE_KEYS = [
-  "privateKey", "private_key", "secret", "apiKey", "api_key", "key",
-  "address", "addresses", "balance", "balances", "txHash", "tx_hash",
-  "signature", "secretKey", "mnemonic", "seed", "password", "token",
+/** Keys that are actual secrets (always redact) */
+const SENSITIVE_SECRET_KEYS = [
+  "privateKey", "private_key", "secret", "apiKey", "api_key", 
+  "secretKey", "mnemonic", "seed", "password",
 ];
 
-/** Sanitize tool call params/result for display */
-function sanitizeForDisplay(data: unknown, maxLen = 100): string {
+/** Keys that may contain sensitive data (redact only in secure context) */
+const SENSITIVE_KEYS = [
+  ...SENSITIVE_SECRET_KEYS,
+  "signature", "token",
+];
+
+/** 
+ * Sanitize tool call params/result for display
+ * @param data - The data to sanitize
+ * @param maxLen - Maximum length to display
+ * @param secretsOnly - If true, only redact true secrets (privateKey, apiKey, etc.), not wallet data
+ */
+function sanitizeForDisplay(data: unknown, maxLen = 100, secretsOnly = false): string {
   if (data === null || data === undefined) return "";
   
   // If it's a string, check for sensitive patterns
@@ -60,10 +70,14 @@ function sanitizeForDisplay(data: unknown, maxLen = 100): string {
   if (typeof data === "object") {
     const obj = data as Record<string, unknown>;
     const sanitized: Record<string, unknown> = {};
+    const keysToCheck = secretsOnly ? SENSITIVE_SECRET_KEYS : SENSITIVE_KEYS;
     
     for (const [key, value] of Object.entries(obj)) {
       const lowerKey = key.toLowerCase();
-      const isSensitive = SENSITIVE_KEYS.some((sk) => lowerKey.includes(sk));
+      // Use exact match or check if key ends with the sensitive suffix
+      const isSensitive = keysToCheck.some((sk) => 
+        lowerKey === sk || lowerKey.endsWith(sk) || lowerKey.endsWith(`_${sk}`)
+      );
       
       if (isSensitive) {
         sanitized[key] = "[redacted]";
@@ -87,8 +101,10 @@ function sanitizeForDisplay(data: unknown, maxLen = 100): string {
 }
 
 /** Type guard for messages with isStreaming property */
-function hasIsStreaming(m: { isStreaming?: boolean }): boolean {
-  return typeof m.isStreaming === "boolean";
+function hasIsStreaming(m: unknown): m is { isStreaming: boolean } {
+  if (typeof m !== "object" || m === null) return false;
+  const obj = m as Record<string, unknown>;
+  return typeof obj.isStreaming === "boolean";
 }
 
 export default function AgentScreen() {
@@ -487,11 +503,11 @@ function ToolCallCard(props: { toolCall: ToolCall }) {
         <Badge label={statusLabel} tone={toolCall.status === "success" ? "good" : toolCall.status === "error" ? "danger" : "warn"} />
       </Row>
       <Muted style={{ fontSize: 11, marginTop: 4 }}>
-        {sanitizeForDisplay(toolCall.params)}
+        {sanitizeForDisplay(toolCall.params, 100, true)}
       </Muted>
       {toolCall.result && (
         <Muted style={{ fontSize: 11, marginTop: 4, color: t.colors.muted }}>
-          {sanitizeForDisplay(toolCall.result)}
+          {sanitizeForDisplay(toolCall.result, 100, true)}
         </Muted>
       )}
     </View>
