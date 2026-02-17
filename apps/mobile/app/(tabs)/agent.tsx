@@ -36,6 +36,61 @@ function shortenHex(input: string): string {
   return `${s.slice(0, 10)}…${s.slice(-6)}`;
 }
 
+/** Keys that may contain sensitive data */
+const SENSITIVE_KEYS = [
+  "privateKey", "private_key", "secret", "apiKey", "api_key", "key",
+  "address", "addresses", "balance", "balances", "txHash", "tx_hash",
+  "signature", "secretKey", "mnemonic", "seed", "password", "token",
+];
+
+/** Sanitize tool call params/result for display */
+function sanitizeForDisplay(data: unknown, maxLen = 100): string {
+  if (data === null || data === undefined) return "";
+  
+  // If it's a string, check for sensitive patterns
+  if (typeof data === "string") {
+    // Truncate long strings
+    if (data.length > maxLen) {
+      return data.slice(0, maxLen) + "…";
+    }
+    return data;
+  }
+  
+  // If it's an object, filter sensitive keys
+  if (typeof data === "object") {
+    const obj = data as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+    
+    for (const [key, value] of Object.entries(obj)) {
+      const lowerKey = key.toLowerCase();
+      const isSensitive = SENSITIVE_KEYS.some((sk) => lowerKey.includes(sk));
+      
+      if (isSensitive) {
+        sanitized[key] = "[redacted]";
+      } else if (typeof value === "object" && value !== null) {
+        sanitized[key] = "[object]";
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    
+    let str = JSON.stringify(sanitized);
+    if (str.length > maxLen) {
+      str = str.slice(0, maxLen) + "…";
+    }
+    return str;
+  }
+  
+  // Fallback
+  const str = String(data);
+  return str.length > maxLen ? str.slice(0, maxLen) + "…" : str;
+}
+
+/** Type guard for messages with isStreaming property */
+function hasIsStreaming(m: { isStreaming?: boolean }): boolean {
+  return typeof m.isStreaming === "boolean";
+}
+
 export default function AgentScreen() {
   const t = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -315,7 +370,7 @@ export default function AgentScreen() {
                   </Row>
                   <View style={{ gap: 10 }}>
                     {(isLive ? chatState.messages : state.agent.messages).map((m) => (
-                      <MessageBubble key={m.id} role={m.role} text={m.text} isStreaming={m.isStreaming} />
+                      <MessageBubble key={m.id} role={m.role} text={m.text} isStreaming={hasIsStreaming(m) ? m.isStreaming : false} />
                     ))}
                   </View>
                   
@@ -390,8 +445,13 @@ export default function AgentScreen() {
                   if (isLive && isTransferRequest(text)) {
                     await transfer.prepare(text);
                   } else if (isLive) {
-                    // Live mode: send to LLM chat
-                    await chatActions.sendMessage(text);
+                    // Live mode: send to LLM chat with error handling
+                    try {
+                      await chatActions.sendMessage(text);
+                    } catch (err) {
+                      await haptic("error");
+                      console.error("Chat send error:", err);
+                    }
                   } else {
                     // Demo mode or non-transfer message
                     actions.sendAgentMessage(text);
@@ -427,11 +487,11 @@ function ToolCallCard(props: { toolCall: ToolCall }) {
         <Badge label={statusLabel} tone={toolCall.status === "success" ? "good" : toolCall.status === "error" ? "danger" : "warn"} />
       </Row>
       <Muted style={{ fontSize: 11, marginTop: 4 }}>
-        {JSON.stringify(toolCall.params).slice(0, 100)}
+        {sanitizeForDisplay(toolCall.params)}
       </Muted>
       {toolCall.result && (
         <Muted style={{ fontSize: 11, marginTop: 4, color: t.colors.muted }}>
-          {String(toolCall.result).slice(0, 100)}
+          {sanitizeForDisplay(toolCall.result)}
         </Muted>
       )}
     </View>

@@ -42,13 +42,23 @@ export type StreamOptions = {
   /** Conversation messages. */
   messages: ChatMessage[];
   /** Tools available to the model. */
-  tools?: unknown[];
+  tools?: OpenAITool[];
   /** Max tokens to generate. Default: provider-specific. */
   maxTokens?: number;
   /** Sampling temperature. Default: provider-specific. */
   temperature?: number;
   /** Request timeout in ms. Default: 30000. */
   timeoutMs?: number;
+};
+
+/** OpenAI function calling tool schema */
+export type OpenAITool = {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 };
 
 /** Async iterable of stream chunks. Call `cancel()` to abort early. */

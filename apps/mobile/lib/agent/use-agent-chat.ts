@@ -8,7 +8,7 @@ import * as React from "react";
 
 import { loadApiKey, hasApiKey, createProvider } from "../agent-runtime/provider-store";
 import { executeTool } from "../agent-runtime/tools/registry";
-import type { ChatMessage as LlmMessage, ChatStream, ParsedToolCall } from "../agent-runtime/types";
+import type { ChatMessage as LlmMessage, ChatStream, ParsedToolCall, OpenAITool } from "../agent-runtime/types";
 
 export type ChatMessage = {
   id: string;
@@ -153,6 +153,22 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
         return;
       }
 
+      // Generate stable assistant message ID before streaming
+      const assistantMsgId = `msg-${Date.now()}-assistant`;
+      const assistantMsg: ChatMessage = {
+        id: assistantMsgId,
+        role: "assistant",
+        text: "",
+        createdAt: Date.now(),
+        isStreaming: true,
+      };
+
+      // Add assistant message placeholder to state
+      setState((s) => ({
+        ...s,
+        messages: [...s.messages, assistantMsg],
+      }));
+
       // Build conversation messages including current user input
       const allMessages = [...state.messages, userMsg];
       const llmMessages = messageToLlmFormat(allMessages);
@@ -163,12 +179,12 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
           model: "gpt-4o-mini",
           systemPrompt: AGENT_SYSTEM_PROMPT,
           messages: msgs,
-          tools: tools as any,
+          tools: toolDefs,
         });
       };
 
       // Get tool definitions for LLM
-      const toolDefs = [
+      const toolDefs: OpenAITool[] = [
         {
           type: "function" as const,
           function: {
@@ -244,24 +260,22 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
         if (chunk.type === "delta") {
           fullText += chunk.text;
           
+          // Update existing assistant message in-place instead of duplicating user message
           setState((s) => ({
             ...s,
-            messages: [
-              ...s.messages.slice(0, -1),
-              { ...userMsg, text: trimmed },
-              {
-                id: `msg-${Date.now()}-assistant`,
-                role: "assistant",
-                text: fullText,
-                createdAt: Date.now(),
-                isStreaming: true,
-              },
-            ],
+            messages: s.messages.map((m) =>
+              m.id === assistantMsgId
+                ? { ...m, text: fullText, isStreaming: true }
+                : m
+            ),
           }));
         } else if (chunk.type === "tool_call") {
           // Add tool call to our list
           const tc = chunk.toolCall;
           currentToolCalls.push(tc);
+          
+          // Derive operationType from tool name - get_balances is read-only
+          const isReadOnly = tc.name === "get_balances";
           
           // Add tool call to state
           const toolCallEntry: ToolCall = {
@@ -269,7 +283,7 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
             toolName: tc.name,
             params: tc.arguments,
             timestamp: new Date().toISOString(),
-            operationType: "write",
+            operationType: isReadOnly ? "read" : "write",
             status: "pending",
           };
           
@@ -327,24 +341,34 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
         streamingRef.current = stream;
 
         fullText = "";
+        const finalAssistantMsgId = `msg-${Date.now()}-assistant`;
+        
+        // Add final assistant message placeholder
+        const finalAssistantMsg: ChatMessage = {
+          id: finalAssistantMsgId,
+          role: "assistant",
+          text: "",
+          createdAt: Date.now(),
+          isStreaming: true,
+        };
+        
+        setState((s) => ({
+          ...s,
+          messages: [...s.messages, finalAssistantMsg],
+        }));
         
         for await (const chunk of stream) {
           if (chunk.type === "delta") {
             fullText += chunk.text;
             
+            // Update assistant message in-place without duplicating
             setState((s) => ({
               ...s,
-              messages: [
-                ...s.messages.slice(0, -1),
-                { ...userMsg, text: trimmed },
-                {
-                  id: `msg-${Date.now()}-assistant`,
-                  role: "assistant",
-                  text: fullText,
-                  createdAt: Date.now(),
-                  isStreaming: true,
-                },
-              ],
+              messages: s.messages.map((m) =>
+                m.id === finalAssistantMsgId
+                  ? { ...m, text: fullText, isStreaming: true }
+                  : m
+              ),
             }));
           } else if (chunk.type === "done") {
             break;
@@ -360,11 +384,12 @@ export function useAgentChatLive(): [AgentChatState, AgentChatActions] {
       }));
 
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Unknown error";
+      // Log raw error to console for debugging, but show sanitized message to user
+      console.error("Agent chat error:", err);
       setState((s) => ({
         ...s,
         isResponding: false,
-        error: `Error: ${errorMsg}`,
+        error: "An unexpected error occurred. Please try again.",
       }));
     }
   }, [state.messages, state.isResponding]);

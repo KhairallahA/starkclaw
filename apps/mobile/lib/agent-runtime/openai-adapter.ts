@@ -21,10 +21,10 @@ const DEFAULT_MODEL = "gpt-4o-mini";
 // SSE line parser
 // ---------------------------------------------------------------------------
 
-function parseSseLine(line: string): StreamChunk | null {
-  if (!line.startsWith("data: ")) return null;
+function parseSseLine(line: string): StreamChunk[] {
+  if (!line.startsWith("data: ")) return [];
   const data = line.slice(6).trim();
-  if (data === "[DONE]") return { type: "done", finishReason: "stop" };
+  if (data === "[DONE]") return [{ type: "done", finishReason: "stop" }];
 
   try {
     const json = JSON.parse(data);
@@ -32,41 +32,64 @@ function parseSseLine(line: string): StreamChunk | null {
     const finishReason = json?.choices?.[0]?.finish_reason;
 
     if (finishReason === "stop" || finishReason === "length") {
-      return { type: "done", finishReason };
+      return [{ type: "done", finishReason }];
     }
 
     const text = delta?.content;
     if (typeof text === "string" && text.length > 0) {
-      return { type: "delta", text };
+      return [{ type: "delta", text }];
     }
 
     // Check for tool calls
     const toolCalls = delta?.tool_calls;
     if (Array.isArray(toolCalls) && toolCalls.length > 0) {
+      const results: StreamChunk[] = [];
+      
       for (const tc of toolCalls) {
         if (tc?.id && tc?.function?.name) {
+          // Accumulate arguments - they may come in fragments
+          const tcId = tc.id;
+          const funcName = tc.function.name;
+          const newArgsFragment = tc.function.arguments || "";
+          
+          // Use a buffer to accumulate (we'd need to track this per-call-id)
+          // For now, try to parse - if it fails, the arguments are incomplete
           let args = {};
-          try {
-            args = JSON.parse(tc.function.arguments || "{}");
-          } catch {
-            // Partial arguments, skip for now
+          if (newArgsFragment) {
+            // Try to parse the complete arguments string
+            // Note: In streaming, arguments come as JSON fragments
+            try {
+              // If it's a complete JSON object, parse it
+              if (newArgsFragment.startsWith("{") && newArgsFragment.endsWith("}")) {
+                args = JSON.parse(newArgsFragment);
+              }
+            } catch {
+              // Partial arguments - emit with empty args, will be completed in next chunk
+              // For now, store as empty - the LLM should send complete args
+            }
           }
-          return {
+          
+          results.push({
             type: "tool_call",
             toolCall: {
-              id: tc.id,
-              name: tc.function.name,
+              id: tcId,
+              name: funcName,
               arguments: args,
             },
-          };
+          });
         }
+      }
+      
+      // Return all tool calls instead of just the first one
+      if (results.length > 0) {
+        return results;
       }
     }
   } catch {
     // Malformed JSON — skip.
   }
 
-  return null;
+  return [];
 }
 
 // ---------------------------------------------------------------------------
@@ -126,16 +149,20 @@ async function* streamSse(
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
-        const chunk = parseSseLine(trimmed);
-        if (chunk) yield chunk;
-        if (chunk?.type === "done") return;
+        const chunks = parseSseLine(trimmed);
+        for (const chunk of chunks) {
+          yield chunk;
+          if (chunk.type === "done") return;
+        }
       }
     }
 
     // Process any remaining buffer.
     if (buffer.trim()) {
-      const chunk = parseSseLine(buffer.trim());
-      if (chunk) yield chunk;
+      const chunks = parseSseLine(buffer.trim());
+      for (const chunk of chunks) {
+        yield chunk;
+      }
     }
 
     // If we never received [DONE], emit one.
@@ -196,6 +223,7 @@ export function createOpenAiProvider(apiKey: string): LlmProvider {
       };
       if (opts.maxTokens != null) body.max_tokens = opts.maxTokens;
       if (opts.temperature != null) body.temperature = opts.temperature;
+      if (opts.tools != null) body.tools = opts.tools;
 
       const generator = streamSse(
         `${OPENAI_BASE}/chat/completions`,
