@@ -77,6 +77,21 @@ describe("session-keys migration", () => {
     vi.setSystemTime(new Date("2026-02-14T00:00:00.000Z"));
   });
 
+  it("throws when allowedContracts is non-empty (not supported by session-account API)", async () => {
+    const sessionWithContracts: StoredSessionKey = {
+      ...session,
+      allowedContracts: ["0x444"],
+    };
+    
+    await expect(
+      registerSessionKeyOnchain({
+        wallet,
+        ownerPrivateKey: "0xowner",
+        session: sessionWithContracts,
+      })
+    ).rejects.toThrow("Contract-level restrictions are not supported");
+  });
+
   it("registers session key with add_or_update_session_key entrypoint and SessionData", async () => {
     hoisted.execute.mockResolvedValue({ transaction_hash: "0xdeadbeef" });
     hoisted.waitForTransaction.mockResolvedValue(undefined);

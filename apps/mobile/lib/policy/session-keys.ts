@@ -132,6 +132,10 @@ export async function registerSessionKeyOnchain(params: {
     );
   }
   
+  // Note: spendingLimit and tokenAddress are stored locally for UI display purposes.
+  // They are NOT sent to the on-chain session-account contract (separate spending policy API required).
+  // Future: call set_spending_policy() after add_or_update_session_key to enforce on-chain.
+  
   const allowedEntrypoints = buildAllowedEntrypoints();
 
   // Call add_or_update_session_key(key, valid_until, max_calls, allowed_entrypoints)
