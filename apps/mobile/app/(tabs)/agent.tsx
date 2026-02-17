@@ -315,7 +315,7 @@ export default function AgentScreen() {
                   </Row>
                   <View style={{ gap: 10 }}>
                     {(isLive ? chatState.messages : state.agent.messages).map((m) => (
-                      <MessageBubble key={m.id} role={m.role} text={m.text} isStreaming={(m as any).isStreaming} />
+                      <MessageBubble key={m.id} role={m.role} text={m.text} isStreaming={m.isStreaming} />
                     ))}
                   </View>
                   
